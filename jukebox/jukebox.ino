@@ -7,8 +7,10 @@
 #define RED_BTN 5
 #define GREEN_BTN 19
 
+// TFT VARIABLE
 TFT_eSPI tft = TFT_eSPI(320, 240);
 
+// RTC VARIABLE
 RTC_DS3231 rtc;
 String formattedTime = "";
 String previousTime = "";
@@ -16,6 +18,7 @@ String previousTime = "";
 // Convert month number to Spanish month name
 const char* months[] = {"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
 
+// STATE MACHINE VARIABLES
 enum State {
   IDLE,
   MUSIC,
@@ -171,7 +174,7 @@ void displayRTC() {
   }
 
   tft.setTextColor(TFT_BLACK);
-  tft.setCursor(15, 220);
+  tft.setCursor(12, 220);
   tft.print(formattedTime);
 }
 
