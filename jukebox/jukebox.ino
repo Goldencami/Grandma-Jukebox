@@ -1,11 +1,22 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <RTClib.h>
+#include <FS.h>
+#include <SD.h>
 
-#define YELLOW_BTN 36
-#define WHITE_BTN 39
-#define RED_BTN 34
-#define GREEN_BTN 35
+#define YELLOW_BTN 16
+#define WHITE_BTN 17
+#define RED_BTN 5
+#define GREEN_BTN 32
+
+// SD CARD VARIABLES
+#define REASSIGN_PINS
+#define SCK 14
+#define MISO 19
+#define MOSI 27
+#define CS 33
+
+SPIClass sdSPI(HSPI);
 
 // TFT VARIABLE
 TFT_eSPI tft = TFT_eSPI(320, 240);
@@ -22,7 +33,9 @@ const char* months[] = {"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio
 enum State {
   IDLE,
   MUSIC,
-  SELECTION
+  SELECTION,
+  PLAY,
+  INTERRUPT
 };
 
 State state = IDLE;
@@ -139,6 +152,32 @@ void eraseArrow(int width, int y) {
   );
 }
 
+// SD CARD FUNCTIONS
+void readDirectory(File dir, int numTabs) {
+  while (true) {
+    File entry = dir.openNextFile();
+
+    if (!entry) {
+      break;
+    }
+
+    for (uint8_t i = 0; i < numTabs; i++) {
+      Serial.print('\t');
+    }
+    Serial.print(entry.name());
+
+    if (entry.isDirectory()) {
+      Serial.println("/");
+      readDirectory(entry, numTabs + 1);
+    } else {
+      Serial.print("\t\t");
+      Serial.println(entry.size(), DEC);
+    }
+    entry.close();
+  }
+  dir.close();
+}
+
 // RTC FUNCTIONS
 void displayRTC() {
   // Get the current time from the RTC
@@ -190,11 +229,7 @@ void handleYellowBtn() {
       lastYellowDebounce = timeNow;
 
       if(yellowBtnState == HIGH) {
-        Serial.println("Yellow button pressed");
         state = MUSIC;
-      }
-      else {
-        Serial.println("Yellow button released");
       }
     }
   }
@@ -211,11 +246,7 @@ bool handleWhiteBtn() {
       lastWhiteDebounce = timeNow;
 
       if(whiteBtnState == HIGH) {
-        Serial.println("White button pressed");
         return true;
-      }
-      else {
-        Serial.println("White button released");
       }
     }
   }
@@ -234,18 +265,14 @@ void handleRedBtn() {
       lastRedDebounce = timeNow;
 
       if(redBtnState == HIGH) {
-        Serial.println("Red button pressed");
         idx = 0;
         state = IDLE;
-      }
-      else {
-        Serial.println("Red button released");
       }
     }
   }
 }
 
-void handleGreenBtn() {
+bool handleGreenBtn() {
   unsigned long timeNow = millis();
 
   if(timeNow - lastGreenDebounce > debounceDelayGreen) {
@@ -256,13 +283,12 @@ void handleGreenBtn() {
       lastGreenDebounce = timeNow;
 
       if(greenBtnState == HIGH) {
-        Serial.println("Green button pressed");
-      }
-      else {
-        Serial.println("Green button released");
+        return true;
       }
     }
   }
+
+  return false;
 }
 
 void setup() {
@@ -271,16 +297,14 @@ void setup() {
   pinMode(YELLOW_BTN, INPUT);
   pinMode(WHITE_BTN, INPUT);
   pinMode(RED_BTN, INPUT);
-  pinMode(GREEN_BTN, INPUT);
+  pinMode(GREEN_BTN, INPUT_PULLUP);
 
   if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
-    Serial.flush();
-    while (1) delay(10);
+    while (1);
   }
 
   if (rtc.lostPower()) {
-    Serial.println("RTC lost power, let's set the time!");
     // When time needs to be set on a new device, or after a power loss, the
     // following line sets the RTC to the date & time this sketch was compiled
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -302,6 +326,13 @@ void setup() {
 
   BMOidleFace();
   displayRTC();
+
+  sdSPI.begin(SCK, MISO, MOSI, CS);
+  // Setup SD Card module
+  if (!SD.begin(CS, sdSPI)) {
+    Serial.println("SD mount failed");
+    while (1);
+  }
 }
 
 void loop() {
@@ -325,6 +356,18 @@ void loop() {
     }
     else if(state == SELECTION) {
       selectMusic();
+
+      if(handleGreenBtn()) {
+
+        if(idx == 0) {
+          File root = SD.open("/canciones/");
+          readDirectory(root, 0);
+        }
+        else if(idx == 1) {
+          File root = SD.open("/himnos/");
+          readDirectory(root, 0);
+        }
+      }
     }
   }
 }
