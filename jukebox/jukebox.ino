@@ -1,13 +1,20 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>
-// #include <Fonts/FreeSans12pt7b.h>
+#include <RTClib.h>
 
-#define YELLOW_BTN 25
-#define WHITE_BTN 26
-#define RED_BTN 27
-#define GREEN_BTN 14
+#define YELLOW_BTN 16
+#define WHITE_BTN 17
+#define RED_BTN 5
+#define GREEN_BTN 19
 
 TFT_eSPI tft = TFT_eSPI(320, 240);
+
+RTC_DS3231 rtc;
+String formattedTime = "";
+String previousTime = "";
+
+// Convert month number to Spanish month name
+const char* months[] = {"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
 
 enum State {
   IDLE,
@@ -17,6 +24,13 @@ enum State {
 
 State state = IDLE;
 State currentScreen;
+
+// BMO COLOURS
+uint16_t bmoGreen = tft.color565(150, 240, 186);
+
+// RTC DELAY
+unsigned int RTCdelay = 500;
+unsigned long lastRTCdelay = millis();
 
 // BUTTON STATES
 unsigned int debounceDelayYellow = 50;
@@ -52,7 +66,6 @@ void BMOidleFace() {
   int h = tft.height();
 
   // background
-  uint16_t bmoGreen = tft.color565(150, 240, 186);
   tft.fillScreen(bmoGreen);
 
   // eye settings
@@ -68,7 +81,6 @@ void BMOidleFace() {
 
 int idx = 0;
 void displayMusicTypes() {
-  uint16_t bmoGreen = tft.color565(150, 240, 186);
   tft.fillScreen(bmoGreen);
 
   tft.setTextColor(TFT_BLACK);
@@ -114,7 +126,6 @@ void drawArrow(int width, int y) {
 }
 
 void eraseArrow(int width, int y) {
-  uint16_t bmoGreen = tft.color565(150, 240, 186);
   int x = 20 + width + 5; 
 
   tft.fillTriangle(
@@ -123,6 +134,45 @@ void eraseArrow(int width, int y) {
     x + 10, y + 2,
     bmoGreen
   );
+}
+
+// RTC FUNCTIONS
+void displayRTC() {
+  // Get the current time from the RTC
+  DateTime now = rtc.now();
+    
+  // Getting each time field in individual variables
+  // And adding a leading zero when needed;
+  String yearStr = String(now.year());
+  String dayStr = (now.day() < 10 ? "0" : "") + String(now.day());
+  String monthStr = (now.month() < 10 ? "0" : "") + String(now.month());
+  monthStr = months[now.month()];
+
+  // 12-hour clock
+  int hour24 = now.hour();
+  int hour12 = hour24 % 12;
+
+  if (hour12 == 0) {
+    hour12 = 12;
+  }
+
+  String hourStr = (hour12 < 10 ? "0" : "") + String(hour12);
+  String minuteStr = (now.minute() < 10 ? "0" : "") + String(now.minute());
+
+  String clockPeriod = (hour24 < 12) ? "AM" : "PM";
+
+  // Complete time string
+  formattedTime = monthStr + " " + dayStr + ", " + yearStr + "  —  " + hourStr + ":" + minuteStr + " " + clockPeriod;
+
+  if (formattedTime != previousTime) {
+    // Erase previous time
+    tft.fillRect(0, 200, 320, 40, bmoGreen);
+    previousTime = formattedTime;
+  }
+
+  tft.setTextColor(TFT_BLACK);
+  tft.setCursor(15, 220);
+  tft.print(formattedTime);
 }
 
 // BUTTON FUNCTIONS
@@ -182,6 +232,7 @@ void handleRedBtn() {
 
       if(redBtnState == HIGH) {
         Serial.println("Red button pressed");
+        idx = 0;
         state = IDLE;
       }
       else {
@@ -219,16 +270,46 @@ void setup() {
   pinMode(RED_BTN, INPUT);
   pinMode(GREEN_BTN, INPUT);
 
+  if (! rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
+    while (1) delay(10);
+  }
+
+  if (rtc.lostPower()) {
+    Serial.println("RTC lost power, let's set the time!");
+    // When time needs to be set on a new device, or after a power loss, the
+    // following line sets the RTC to the date & time this sketch was compiled
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    // This line sets the RTC with an explicit date & time, for example to set
+    // January 21, 2014 at 3am you would call:
+    //rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+  }
+
+  // When time needs to be re-set on a previously configured device, the
+  // following line sets the RTC to the date & time this sketch was compiled
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // This line sets the RTC with an explicit date & time, for example to set
+  // January 21, 2014 at 3am you would call:
+  //rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+  
   tft.init();
   tft.setRotation(0);
   tft.setFreeFont(&FreeSansBold12pt7b);
 
   BMOidleFace();
+  displayRTC();
 }
 
 void loop() {
   handleYellowBtn();
   handleRedBtn();
+
+  unsigned long timeNow = millis();
+  if(timeNow - lastRTCdelay > RTCdelay) {
+    lastRTCdelay = timeNow;
+    displayRTC();
+  }
 
   if(state != currentScreen || state == SELECTION) {
     currentScreen = state;
