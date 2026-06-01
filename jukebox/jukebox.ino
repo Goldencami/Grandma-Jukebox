@@ -2,10 +2,10 @@
 #include <TFT_eSPI.h>
 #include <RTClib.h>
 
-#define YELLOW_BTN 16
-#define WHITE_BTN 17
-#define RED_BTN 5
-#define GREEN_BTN 19
+#define YELLOW_BTN 36
+#define WHITE_BTN 39
+#define RED_BTN 34
+#define GREEN_BTN 35
 
 // TFT VARIABLE
 TFT_eSPI tft = TFT_eSPI(320, 240);
