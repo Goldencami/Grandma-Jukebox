@@ -6,17 +6,15 @@
 
 #define YELLOW_BTN 16
 #define WHITE_BTN 17
-#define RED_BTN 5
+#define RED_BTN 27
 #define GREEN_BTN 32
 
 // SD CARD VARIABLES
 #define REASSIGN_PINS
-#define SCK 14
+#define SCK 18
 #define MISO 19
-#define MOSI 27
-#define CS 33
-
-SPIClass sdSPI(HSPI);
+#define MOSI 23
+#define CS 5
 
 // TFT VARIABLE
 TFT_eSPI tft = TFT_eSPI(320, 240);
@@ -35,14 +33,14 @@ enum State {
   MUSIC,
   SELECTION,
   PLAY,
-  INTERRUPT
+  AUDIO
 };
 
 State state = IDLE;
 State currentScreen;
 
 // BMO COLOURS
-uint16_t bmoGreen = tft.color565(150, 240, 186);
+uint16_t bmoGreen;
 
 // RTC DELAY
 unsigned int RTCdelay = 500;
@@ -227,8 +225,11 @@ void handleYellowBtn() {
     if(newBtnState != yellowBtnState) {
       yellowBtnState = newBtnState;
       lastYellowDebounce = timeNow;
-
-      if(yellowBtnState == HIGH) {
+      
+      // because of pullups
+      // pressed = LOW
+      // released = HIGH
+      if(yellowBtnState == LOW) {
         state = MUSIC;
       }
     }
@@ -245,7 +246,10 @@ bool handleWhiteBtn() {
       whiteBtnState = newBtnState;
       lastWhiteDebounce = timeNow;
 
-      if(whiteBtnState == HIGH) {
+      // because of pullups
+      // pressed = LOW
+      // released = HIGH
+      if(whiteBtnState == LOW) {
         return true;
       }
     }
@@ -264,7 +268,10 @@ void handleRedBtn() {
       redBtnState = newBtnState;
       lastRedDebounce = timeNow;
 
-      if(redBtnState == HIGH) {
+      // because of pullups
+      // pressed = LOW
+      // released = HIGH
+      if(redBtnState == LOW) {
         idx = 0;
         state = IDLE;
       }
@@ -282,7 +289,10 @@ bool handleGreenBtn() {
       greenBtnState = newBtnState;
       lastGreenDebounce = timeNow;
 
-      if(greenBtnState == HIGH) {
+      // because of pullups
+      // pressed = LOW
+      // released = HIGH
+      if(greenBtnState == LOW) {
         return true;
       }
     }
@@ -294,10 +304,23 @@ bool handleGreenBtn() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(YELLOW_BTN, INPUT);
-  pinMode(WHITE_BTN, INPUT);
-  pinMode(RED_BTN, INPUT);
+  Serial.println("HELP");
+
+  pinMode(YELLOW_BTN, INPUT_PULLUP);
+  pinMode(WHITE_BTN, INPUT_PULLUP);
+  pinMode(RED_BTN, INPUT_PULLUP);
   pinMode(GREEN_BTN, INPUT_PULLUP);
+
+  // FORCE CS pins HIGH BEFORE SPI START
+  pinMode(CS, OUTPUT);
+  digitalWrite(CS, HIGH);
+
+  SPI.begin(SCK, MISO, MOSI);
+
+  tft.init();
+  tft.setRotation(0);
+  tft.setFreeFont(&FreeSansBold12pt7b);
+  bmoGreen = tft.color565(150, 240, 186);
 
   if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
@@ -319,20 +342,18 @@ void setup() {
   // This line sets the RTC with an explicit date & time, for example to set
   // January 21, 2014 at 3am you would call:
   //rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
-  
-  tft.init();
-  tft.setRotation(0);
-  tft.setFreeFont(&FreeSansBold12pt7b);
 
-  BMOidleFace();
-  displayRTC();
-
-  sdSPI.begin(SCK, MISO, MOSI, CS);
   // Setup SD Card module
-  if (!SD.begin(CS, sdSPI)) {
+  if (!SD.begin(5, SPI, 4000000)) {
     Serial.println("SD mount failed");
     while (1);
   }
+  else {
+    Serial.println("SD OK");
+  }
+
+  BMOidleFace();
+  displayRTC();
 }
 
 void loop() {
@@ -358,14 +379,17 @@ void loop() {
       selectMusic();
 
       if(handleGreenBtn()) {
-
         if(idx == 0) {
           File root = SD.open("/canciones/");
-          readDirectory(root, 0);
+          if (root) {
+            readDirectory(root, 0);
+          }
         }
         else if(idx == 1) {
           File root = SD.open("/himnos/");
-          readDirectory(root, 0);
+          if (root) {
+            readDirectory(root, 0);
+          }
         }
       }
     }
