@@ -43,6 +43,15 @@ Jukebox to play songs for grandma and pill reminder.
 | `SDA` | `GPIO21` |
 | `SCL` | `GPIO22` |
 
+### MAX98357 I2S
+| MAX98357 I2S | ESP32 |
+|---------|------------|
+| `VIN` | `VIN` |
+| `GND` | `GND` |
+| `LRC` | `GPIO13` |
+| `BCLK` | `GPIO14` |
+| `DIN` | `GPIO33` |
+
 
 ### BUTTONS
 | BUTTONS | ESP32 |
