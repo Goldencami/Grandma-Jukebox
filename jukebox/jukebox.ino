@@ -37,8 +37,20 @@ String formattedTime = "";
 String previousTime = "";
 String dateArr[3]; // [month, day, year]
 String hoursArr[3]; // [hour, minute, AM/PM]
+String tempDateArr[3];
+String tempHourArr[3];
 bool isSetDateDone = false;
 bool isSetHourDone = false;
+
+int lastSec = -1;
+int lastMin = -1;
+int lastHour = -1;
+int lastDay = -1;
+int lastMonth = -1;
+int lastYear = -1;
+
+char timeBuffer[20];
+char dateBuffer[30];
 
 // Convert month number to Spanish month name
 const char* months[] = {"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
@@ -54,10 +66,15 @@ enum State {
 };
 
 State state = IDLE;
+
 bool isIdleScreenDisplayed = false;
 bool isMusicTypeDisplayed = false;
 bool isConfigScreenDisplayed = false;
+
 bool started = false;
+int lastMusicIdx = -1;
+int lastDateIdx = -1;
+int lastTimeIdx = -1;
 
 // BMO COLOURS
 uint16_t bmoGreen;
@@ -174,110 +191,150 @@ void displayMusicTypes() {
 }
 
 void selectMusic() {
-  if(handleWhiteBtn()) {
+  if (handleWhiteBtn()) {
     musicIdx = (musicIdx + 1) % 2;
   }
 
-  // Arrow pointing at index 0 (songs)
-  if(musicIdx == 0) {
-    eraseArrow(200, 120);
-    drawArrow(135, 90);
-  }
-  else if(musicIdx == 1) { // Arrow pointing at index 1 (hymns)
-    eraseArrow(135, 90);
-    drawArrow(200, 120);
-  }
-}
+  if (musicIdx == lastMusicIdx) return; // no redraw and avoids glitching screen
 
+  // erase both first
+  eraseArrow(135, 90);
+  eraseArrow(200, 120);
+
+  if (musicIdx == 0) drawArrow(135, 90);
+  else drawArrow(200, 120);
+
+  lastMusicIdx = musicIdx;
+}
 int dateIdx = 0;
-void setDate() {
-  // next value
-  if(handleGreenBtn()) {
-    if(dateIdx == 2) {
+void setDate(String *outputArray) {
+  if (handleGreenBtn()) {
+    if (dateIdx == 2) {
+      int year = outputArray[2].toInt();
+      int month = monthIdx;
+      int day = outputArray[1].toInt();
+
+      // safety clamps
+      if (year < 2000) year = 2000;
+      if (year > 2099) year = 2099;
+
+      int maxDays = getMaxDays(month, year);
+      if (day < 1) day = 1;
+      if (day > maxDays) day = maxDays;
+
+      DateTime now = rtc.now();
+      rtc.adjust(DateTime(year, month, day, now.hour(), now.minute(), 0));
+
+      dateArr[0] = outputArray[0];
+      dateArr[1] = outputArray[1];
+      dateArr[2] = outputArray[2];
+
       isSetDateDone = true;
       dateIdx = 0;
+
       tft.fillRect(20, 80, 250, 120, bmoGreen);
       return;
     }
-    dateIdx += 1;
+
+    dateIdx++;
   }
 
   selectDate();
 
-  if(handleWhiteBtn()) {
+  if (handleWhiteBtn()) {
     tft.fillRect(20, 80, 250, 120, bmoGreen);
 
-    if(dateIdx == 0) {
-      monthIdx = (monthIdx + 1) % 13;
-
-      if(monthIdx == 0) {
-        monthIdx = 1;
-      }
-      
-      dateArr[dateIdx] = months[monthIdx];
+    if (dateIdx == 0) {
+      monthIdx++;
+      if (monthIdx > 12) monthIdx = 1;
+      outputArray[0] = months[monthIdx];
     }
-    else if(dateIdx == 1) {
-      int tempDay = (dateArr[dateIdx].toInt() + 1) % 32;
+    else if (dateIdx == 1) {
+      int year = outputArray[2].toInt();
+      int tempDay = outputArray[1].toInt();
 
-      if(tempDay == 0) {
-        tempDay = 1;
-      }
+      tempDay++;
+      int maxDays = getMaxDays(monthIdx, year);
+      if (tempDay > maxDays) tempDay = 1;
 
-      dateArr[dateIdx] = (tempDay < 10) ? "0" + String(tempDay) : String(tempDay);
+      outputArray[1] = (tempDay < 10) ? "0" + String(tempDay) : String(tempDay);
     }
-    else if(dateIdx == 2) {
-      int tempYear = (dateArr[dateIdx].toInt() + 1);
-      dateArr[dateIdx] = String(tempYear);
-    }
-  }
-  else if(handleYellowBtn()) {
-    tft.fillRect(20, 80, 250, 120, bmoGreen);
-
-    if(dateIdx == 0) {
-      monthIdx = (monthIdx - 1) % 13;
-      Serial.println(monthIdx);
-
-      if(monthIdx == 0) {
-        monthIdx = 12;
-      }
-      
-      dateArr[dateIdx] = months[monthIdx];
-    }
-    else if(dateIdx == 1) {
-      int tempDay = (dateArr[dateIdx].toInt() - 1) % 32;
-
-      if(tempDay == 0) {
-        tempDay = 31;
-      }
-
-      dateArr[dateIdx] = (tempDay < 10) ? "0" + String(tempDay) : String(tempDay);
-    }
-    else if(dateIdx == 2) {
-      int tempYear = (dateArr[dateIdx].toInt() - 1);
-      dateArr[dateIdx] = String(tempYear);
+    else if (dateIdx == 2) {
+      int tempYear = outputArray[2].toInt();
+      tempYear++;
+      if (tempYear > 2099) tempYear = 2000;
+      outputArray[2] = String(tempYear);
     }
   }
 
-  // tft.setCursor(20, 120);   // Month
-  String month = dateArr[0];
+  else if (handleYellowBtn()) {
+    tft.fillRect(20, 80, 250, 120, bmoGreen);
+
+    if (dateIdx == 0) {
+      monthIdx--;
+      if (monthIdx < 1) monthIdx = 12;
+      outputArray[0] = months[monthIdx];
+    }
+    else if (dateIdx == 1) {
+      int year = outputArray[2].toInt();
+      int tempDay = outputArray[1].toInt();
+
+      tempDay--;
+      int maxDays = getMaxDays(monthIdx, year);
+      if (tempDay < 1) tempDay = maxDays;
+
+      outputArray[1] = (tempDay < 10) ? "0" + String(tempDay) : String(tempDay);
+    }
+    else if (dateIdx == 2) {
+      int tempYear = outputArray[2].toInt();
+      tempYear--;
+      if (tempYear < 2000) tempYear = 2099;
+      outputArray[2] = String(tempYear);
+    }
+  }
+
+  String month = outputArray[0];
 
   int regionX = 40;
   int regionW = 100;
-
   int textW = tft.textWidth(month);
   int x = regionX + (regionW - textW) / 2;
 
   tft.setCursor(x, 120);
   tft.print(month);
 
-  tft.setCursor(170, 120);  // Day
-  tft.print(dateArr[1]);
+  tft.setCursor(170, 120);
+  tft.print(outputArray[1]);
 
-  tft.setCursor(210, 120);  // Year
-  tft.print(dateArr[2]);
+  tft.setCursor(210, 120);
+  tft.print(outputArray[2]);
+}
+
+int getMaxDays(int month, int year) {
+  if(month == 2) {
+    bool leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    return leap ? 29 : 28;
+  }
+
+  if(month == 4 || month == 6 || month == 9 || month == 11)
+    return 30;
+
+  return 31;
 }
 
 void selectDate() {
+  // if (dateIdx == lastDateIdx) return;
+
+  // eraseDownArrow(60, 90);
+  // eraseDownArrow(153, 90);
+  // eraseDownArrow(208, 90);
+
+  // if (dateIdx == 0) drawDownArrow(60, 90);
+  // else if (dateIdx == 1) drawDownArrow(153, 90);
+  // else drawDownArrow(208, 90);
+
+  // lastDateIdx = dateIdx;
+
   if(dateIdx == 0) {
     eraseDownArrow(208, 90);
     drawDownArrow(60, 90);
@@ -293,82 +350,96 @@ void selectDate() {
 }
 
 int timeIdx = 0;
-void setHour() {
-  // next value
-  if(handleGreenBtn()) {
-    if(timeIdx == 2) {
+void setHour(String *outputArray) {
+  if (handleGreenBtn()) {
+    if (timeIdx == 2) {
+      int hour12 = outputArray[0].toInt();
+      int minute = outputArray[1].toInt();
+      String ampm = outputArray[2];
+
+      if (minute < 0 || minute > 59) minute = 0;
+
+      int hour24 = hour12;
+
+      if (ampm == "PM" && hour12 != 12) hour24 += 12;
+      if (ampm == "AM" && hour12 == 12) hour24 = 0;
+
+      DateTime now = rtc.now();
+      rtc.adjust(DateTime(now.year(), now.month(), now.day(), hour24, minute, 0));
+
+      hoursArr[0] = outputArray[0];
+      hoursArr[1] = outputArray[1];
+      hoursArr[2] = outputArray[2];
+
       isSetHourDone = true;
       timeIdx = 0;
+
       tft.fillRect(20, 80, 250, 120, bmoGreen);
       return;
     }
-    timeIdx += 1;
+
+    timeIdx++;
   }
 
   selectHour();
 
-  if(handleWhiteBtn()) {
+  if (handleWhiteBtn()) {
     tft.fillRect(20, 80, 250, 120, bmoGreen);
 
-    if(timeIdx == 0) {
-      int tempHour = hoursArr[timeIdx].toInt();
-      tempHour = (tempHour + 1) % 12;
-
-      if(tempHour == 0) {
-        tempHour = 12;
-      }
-
-      hoursArr[timeIdx] = (tempHour < 10) ? "0" + String(tempHour) : String(tempHour);
+    if (timeIdx == 0) {
+      int tempHour = outputArray[0].toInt();
+      tempHour = (tempHour % 12) + 1;
+      outputArray[0] = (tempHour < 10) ? "0" + String(tempHour) : String(tempHour);
     }
-    else if(timeIdx == 1) {
-      int tempMin = hoursArr[timeIdx].toInt();
+    else if (timeIdx == 1) {
+      int tempMin = outputArray[1].toInt();
       tempMin = (tempMin + 1) % 60;
-
-      hoursArr[timeIdx] = (tempMin < 10) ? "0" + String(tempMin) : String(tempMin);
+      outputArray[1] = (tempMin < 10) ? "0" + String(tempMin) : String(tempMin);
     }
-    else if(timeIdx == 2) {
-      if(hoursArr[timeIdx] == "AM") {
-        hoursArr[timeIdx] = "PM";
-      }
-      else if(hoursArr[timeIdx] == "PM") {
-        hoursArr[timeIdx] = "AM";
-      }
+    else if (timeIdx == 2) {
+      outputArray[2] = (outputArray[2] == "AM") ? "PM" : "AM";
     }
   }
-  else if(handleYellowBtn()) {
+
+  else if (handleYellowBtn()) {
     tft.fillRect(20, 80, 250, 120, bmoGreen);
 
-    if(timeIdx == 0) {
-      int tempHour = hoursArr[timeIdx].toInt();
-      tempHour = (tempHour - 1) % 12;
+    if (timeIdx == 0) {
+      int tempHour = outputArray[0].toInt();
+      tempHour--;
+      if (tempHour <= 0) tempHour = 12;
 
-      if(tempHour == 0) {
-        tempHour = 12;
-      }
-
-      hoursArr[timeIdx] = (tempHour < 10) ? "0" + String(tempHour) : String(tempHour);
+      outputArray[0] = (tempHour < 10) ? "0" + String(tempHour) : String(tempHour);
     }
-    else if(timeIdx == 1) {
-      int tempMin = hoursArr[timeIdx].toInt();
-      tempMin = (tempMin - 1 + 60) % 60;
+    else if (timeIdx == 1) {
+      int tempMin = outputArray[1].toInt();
+      tempMin--;
+      if (tempMin < 0) tempMin = 59;
 
-      hoursArr[timeIdx] = (tempMin < 10) ? "0" + String(tempMin) : String(tempMin);
+      outputArray[1] = (tempMin < 10) ? "0" + String(tempMin) : String(tempMin);
     }
-    else if(timeIdx == 2) {
-      if(hoursArr[timeIdx] == "AM") {
-        hoursArr[timeIdx] = "PM";
-      }
-      else if(hoursArr[timeIdx] == "PM") {
-        hoursArr[timeIdx] = "AM";
-      }
+    else if (timeIdx == 2) {
+      outputArray[2] = (outputArray[2] == "AM") ? "PM" : "AM";
     }
   }
 
   tft.setCursor(110, 120);
-  tft.print(hoursArr[0] + " : " + hoursArr[1] + " " + hoursArr[2]);
+  tft.print(outputArray[0] + " : " + outputArray[1] + " " + outputArray[2]);
 }
 
 void selectHour() {
+  // if (timeIdx == lastTimeIdx) return;
+
+  // eraseDownArrow(93, 90);
+  // eraseDownArrow(139, 90);
+  // eraseDownArrow(175, 90);
+
+  // if (timeIdx == 0) drawDownArrow(93, 90);
+  // else if (timeIdx == 1) drawDownArrow(139, 90);
+  // else drawDownArrow(175, 90);
+
+  // lastTimeIdx = timeIdx;
+
   if(timeIdx == 0) {
     eraseDownArrow(175, 90);
     drawDownArrow(93, 90);
@@ -499,26 +570,21 @@ void getHour(String *outputArray, DateTime now) {
 }
 
 void displayRTC() {
-  // Get the current time from the RTC
   DateTime now = rtc.now();
-    
-  // Getting each time field in individual variables
-  // And adding a leading zero when needed;
+
   getDate(dateArr, now);
   getHour(hoursArr, now);
 
-  // Complete time string
-  formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + "  —  " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
+  formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + " — " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
 
   if (formattedTime != previousTime) {
-    // Erase previous time
-    tft.fillRect(0, 200, 320, 40, bmoGreen);
+    tft.fillRect(0, 200, 320, 40, bmoGreen); // full clear band
+    tft.setTextColor(TFT_BLACK, bmoGreen);
+    tft.setCursor(12, 220);
+    tft.print(formattedTime);
+
     previousTime = formattedTime;
   }
-
-  tft.setTextColor(TFT_BLACK);
-  tft.setCursor(12, 220);
-  tft.print(formattedTime);
 }
 
 // BUTTON FUNCTIONS
@@ -640,15 +706,6 @@ void setup() {
     while (1);
   }
 
-  if (rtc.lostPower()) {
-    // When time needs to be set on a new device, or after a power loss, the
-    // following line sets the RTC to the date & time this sketch was compiled
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    // This line sets the RTC with an explicit date & time, for example to set
-    // January 21, 2014 at 3am you would call:
-    //rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
-  }
-
   // When time needs to be re-set on a previously configured device, the
   // following line sets the RTC to the date & time this sketch was compiled
   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -672,14 +729,18 @@ void setup() {
 void loop() {
   audio.loop();
 
-  // if(handleYellowBtn()) {
-  //   state = SELECTION;
-  // }
+  static unsigned long redHoldStart = 0;
 
-  if(digitalRead(RED_BTN) == LOW && digitalRead(WHITE_BTN) == LOW && state != CONFIGS) {
-    isSetDateDone = false;
-    isSetHourDone = false;
-    state = CONFIGS;
+  if (digitalRead(RED_BTN) == LOW) {
+    if (redHoldStart == 0) redHoldStart = millis();
+
+    if (millis() - redHoldStart > 3000) {
+      isSetDateDone = false;
+      isSetHourDone = false;
+      state = CONFIGS;
+    }
+  } else {
+    redHoldStart = 0;
   }
 
   unsigned long timeNow = millis();
@@ -767,31 +828,47 @@ void loop() {
         tft.fillScreen(bmoGreen);
         tft.setCursor(20, 40);
         tft.print("Configuraciones");
+
+        DateTime now = rtc.now();
+        getDate(tempDateArr, now);
+        getHour(tempHourArr, now);
+
         isConfigScreenDisplayed = true;
       }
 
       if(handleRedBtn()) {
         dateIdx = 0;
         timeIdx = 0;
+        lastDateIdx = -1;
+        lastTimeIdx = -1;
+
         isSetDateDone = false;
         isSetHourDone = false;
         isConfigScreenDisplayed = false;
+
         state = IDLE;
         started = false;
       }
 
       if(!isSetDateDone && !isSetHourDone) {
-        setDate();
-        return;
+        setDate(tempDateArr);
       }
       else if(isSetDateDone && !isSetHourDone) {
-        setHour();
-        return;
+        setHour(tempHourArr);
       }
 
-      isSetDateDone = false;
-      isSetHourDone = false;
-      state = IDLE;
+      if(isSetDateDone && isSetHourDone) {
+        isSetDateDone = false;
+        isSetHourDone = false;
+
+        dateIdx = 0;
+        timeIdx = 0;
+        lastDateIdx = -1;
+        lastTimeIdx = -1;
+
+        isConfigScreenDisplayed = false;
+        state = IDLE;
+      }
     }
   }
 }
