@@ -37,9 +37,12 @@ String formattedTime = "";
 String previousTime = "";
 String dateArr[3]; // [month, day, year]
 String hoursArr[3]; // [hour, minute, AM/PM]
+bool isSetDateDone = false;
+bool isSetHourDone = false;
 
 // Convert month number to Spanish month name
 const char* months[] = {"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
+int monthIdx = 0;
 
 // STATE MACHINE VARIABLES
 enum State {
@@ -112,7 +115,6 @@ void BMOidleFace() {
 
 void drawArrow(int width, int y) {
   int x = 20 + width + 5;
-  // tft.fillTriangle(30, 40, 50, 30, 50, 50, TFT_BLACK);
 
   tft.fillTriangle(
     x, y - 8,
@@ -133,6 +135,28 @@ void eraseArrow(int width, int y) {
   );
 }
 
+void drawDownArrow(int width, int y) {
+  int x = 20 + width + 5;
+
+  tft.fillTriangle(
+    x,      y - 10,  // top-left of base
+    x + 10, y - 10,  // top-right of base
+    x + 5,  y,       // bottom tip
+    TFT_BLACK
+  );
+}
+
+void eraseDownArrow(int width, int y) {
+  int x = 20 + width + 5;
+
+  tft.fillTriangle(
+    x,      y - 10,  // top-left of base
+    x + 10, y - 10,  // top-right of base
+    x + 5,  y,       // bottom tip
+    bmoGreen
+  );
+}
+
 int musicIdx = 0;
 void displayMusicTypes() {
   tft.fillScreen(bmoGreen);
@@ -149,10 +173,6 @@ void displayMusicTypes() {
   tft.print("Himnos Biblicos");
 }
 
-void displayConfigs() {
-
-}
-
 void selectMusic() {
   if(handleWhiteBtn()) {
     musicIdx = (musicIdx + 1) % 2;
@@ -166,6 +186,200 @@ void selectMusic() {
   else if(musicIdx == 1) { // Arrow pointing at index 1 (hymns)
     eraseArrow(135, 90);
     drawArrow(200, 120);
+  }
+}
+
+int dateIdx = 0;
+void setDate() {
+  // next value
+  if(handleGreenBtn()) {
+    if(dateIdx == 2) {
+      isSetDateDone = true;
+      dateIdx = 0;
+      tft.fillRect(20, 80, 250, 120, bmoGreen);
+      return;
+    }
+    dateIdx += 1;
+  }
+
+  selectDate();
+
+  if(handleWhiteBtn()) {
+    tft.fillRect(20, 80, 250, 120, bmoGreen);
+
+    if(dateIdx == 0) {
+      monthIdx = (monthIdx + 1) % 13;
+
+      if(monthIdx == 0) {
+        monthIdx = 1;
+      }
+      
+      dateArr[dateIdx] = months[monthIdx];
+    }
+    else if(dateIdx == 1) {
+      int tempDay = (dateArr[dateIdx].toInt() + 1) % 32;
+
+      if(tempDay == 0) {
+        tempDay = 1;
+      }
+
+      dateArr[dateIdx] = (tempDay < 10) ? "0" + String(tempDay) : String(tempDay);
+    }
+    else if(dateIdx == 2) {
+      int tempYear = (dateArr[dateIdx].toInt() + 1);
+      dateArr[dateIdx] = String(tempYear);
+    }
+  }
+  else if(handleYellowBtn()) {
+    tft.fillRect(20, 80, 250, 120, bmoGreen);
+
+    if(dateIdx == 0) {
+      monthIdx = (monthIdx - 1) % 13;
+      Serial.println(monthIdx);
+
+      if(monthIdx == 0) {
+        monthIdx = 12;
+      }
+      
+      dateArr[dateIdx] = months[monthIdx];
+    }
+    else if(dateIdx == 1) {
+      int tempDay = (dateArr[dateIdx].toInt() - 1) % 32;
+
+      if(tempDay == 0) {
+        tempDay = 31;
+      }
+
+      dateArr[dateIdx] = (tempDay < 10) ? "0" + String(tempDay) : String(tempDay);
+    }
+    else if(dateIdx == 2) {
+      int tempYear = (dateArr[dateIdx].toInt() - 1);
+      dateArr[dateIdx] = String(tempYear);
+    }
+  }
+
+  // tft.setCursor(20, 120);   // Month
+  String month = dateArr[0];
+
+  int regionX = 40;
+  int regionW = 100;
+
+  int textW = tft.textWidth(month);
+  int x = regionX + (regionW - textW) / 2;
+
+  tft.setCursor(x, 120);
+  tft.print(month);
+
+  tft.setCursor(170, 120);  // Day
+  tft.print(dateArr[1]);
+
+  tft.setCursor(210, 120);  // Year
+  tft.print(dateArr[2]);
+}
+
+void selectDate() {
+  if(dateIdx == 0) {
+    eraseDownArrow(208, 90);
+    drawDownArrow(60, 90);
+  }
+  else if(dateIdx == 1) {
+    eraseDownArrow(60, 90);
+    drawDownArrow(153, 90);
+  }
+  else if(dateIdx == 2) {
+    eraseDownArrow(153, 90);
+    drawDownArrow(208, 90);
+  }
+}
+
+int timeIdx = 0;
+void setHour() {
+  // next value
+  if(handleGreenBtn()) {
+    if(timeIdx == 2) {
+      isSetHourDone = true;
+      timeIdx = 0;
+      tft.fillRect(20, 80, 250, 120, bmoGreen);
+      return;
+    }
+    timeIdx += 1;
+  }
+
+  selectHour();
+
+  if(handleWhiteBtn()) {
+    tft.fillRect(20, 80, 250, 120, bmoGreen);
+
+    if(timeIdx == 0) {
+      int tempHour = hoursArr[timeIdx].toInt();
+      tempHour = (tempHour + 1) % 12;
+
+      if(tempHour == 0) {
+        tempHour = 12;
+      }
+
+      hoursArr[timeIdx] = (tempHour < 10) ? "0" + String(tempHour) : String(tempHour);
+    }
+    else if(timeIdx == 1) {
+      int tempMin = hoursArr[timeIdx].toInt();
+      tempMin = (tempMin + 1) % 60;
+
+      hoursArr[timeIdx] = (tempMin < 10) ? "0" + String(tempMin) : String(tempMin);
+    }
+    else if(timeIdx == 2) {
+      if(hoursArr[timeIdx] == "AM") {
+        hoursArr[timeIdx] = "PM";
+      }
+      else if(hoursArr[timeIdx] == "PM") {
+        hoursArr[timeIdx] = "AM";
+      }
+    }
+  }
+  else if(handleYellowBtn()) {
+    tft.fillRect(20, 80, 250, 120, bmoGreen);
+
+    if(timeIdx == 0) {
+      int tempHour = hoursArr[timeIdx].toInt();
+      tempHour = (tempHour - 1) % 12;
+
+      if(tempHour == 0) {
+        tempHour = 12;
+      }
+
+      hoursArr[timeIdx] = (tempHour < 10) ? "0" + String(tempHour) : String(tempHour);
+    }
+    else if(timeIdx == 1) {
+      int tempMin = hoursArr[timeIdx].toInt();
+      tempMin = (tempMin - 1 + 60) % 60;
+
+      hoursArr[timeIdx] = (tempMin < 10) ? "0" + String(tempMin) : String(tempMin);
+    }
+    else if(timeIdx == 2) {
+      if(hoursArr[timeIdx] == "AM") {
+        hoursArr[timeIdx] = "PM";
+      }
+      else if(hoursArr[timeIdx] == "PM") {
+        hoursArr[timeIdx] = "AM";
+      }
+    }
+  }
+
+  tft.setCursor(110, 120);
+  tft.print(hoursArr[0] + " : " + hoursArr[1] + " " + hoursArr[2]);
+}
+
+void selectHour() {
+  if(timeIdx == 0) {
+    eraseDownArrow(175, 90);
+    drawDownArrow(93, 90);
+  }
+  else if(timeIdx == 1) {
+    eraseDownArrow(93, 90);
+    drawDownArrow(139, 90);
+  }
+  else if(timeIdx == 2) {
+    eraseDownArrow(139, 90);
+    drawDownArrow(175, 90);
   }
 }
 
@@ -260,7 +474,8 @@ void getDate(String *outputArray, DateTime now) {
   String yearStr = String(now.year());
   String dayStr = (now.day() < 10 ? "0" : "") + String(now.day());
   String monthStr = (now.month() < 10 ? "0" : "") + String(now.month());
-  monthStr = months[now.month()];
+  monthIdx = now.month();
+  monthStr = months[monthIdx];
 
   // [month, day, year]
   outputArray[0] = monthStr;
@@ -457,16 +672,18 @@ void setup() {
 void loop() {
   audio.loop();
 
-  if(handleYellowBtn()) {
-    state = SELECTION;
-  }
+  // if(handleYellowBtn()) {
+  //   state = SELECTION;
+  // }
 
-  if(digitalRead(RED_BTN) == LOW && digitalRead(WHITE_BTN) == LOW) {
+  if(digitalRead(RED_BTN) == LOW && digitalRead(WHITE_BTN) == LOW && state != CONFIGS) {
+    isSetDateDone = false;
+    isSetHourDone = false;
     state = CONFIGS;
   }
 
   unsigned long timeNow = millis();
-  if(timeNow - lastRTCdelay > RTCdelay) {
+  if((timeNow - lastRTCdelay > RTCdelay) && state != CONFIGS) {
     lastRTCdelay = timeNow;
     displayRTC();
   }
@@ -476,7 +693,10 @@ void loop() {
       BMOidleFace();
       isIdleScreenDisplayed = true;
     }
-    
+
+    if(handleYellowBtn()) {
+      state = SELECTION;
+    }
   }
   else {
     isIdleScreenDisplayed = false;
@@ -544,8 +764,34 @@ void loop() {
     }
     else if(state == CONFIGS) {
       if(!isConfigScreenDisplayed) {
-        
+        tft.fillScreen(bmoGreen);
+        tft.setCursor(20, 40);
+        tft.print("Configuraciones");
+        isConfigScreenDisplayed = true;
       }
+
+      if(handleRedBtn()) {
+        dateIdx = 0;
+        timeIdx = 0;
+        isSetDateDone = false;
+        isSetHourDone = false;
+        isConfigScreenDisplayed = false;
+        state = IDLE;
+        started = false;
+      }
+
+      if(!isSetDateDone && !isSetHourDone) {
+        setDate();
+        return;
+      }
+      else if(isSetDateDone && !isSetHourDone) {
+        setHour();
+        return;
+      }
+
+      isSetDateDone = false;
+      isSetHourDone = false;
+      state = IDLE;
     }
   }
 }
