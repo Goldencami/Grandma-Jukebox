@@ -7,20 +7,20 @@
 
 #define YELLOW_BTN 16
 #define WHITE_BTN 17
-#define RED_BTN 27
-#define GREEN_BTN 32
+#define RED_BTN 39
+#define GREEN_BTN 40
 
 // SD CARD VARIABLES
 #define REASSIGN_PINS
 #define SCK 18
 #define MISO 19
-#define MOSI 23
+#define MOSI 11
 #define CS 5
 
 // MAX98357 I2S VARIABLES
 #define I2S_BCLK 14
 #define I2S_LRC  13
-#define I2S_DOUT 33
+#define I2S_DOUT 35
 
 Audio audio;
 String musicFiles[50];
@@ -694,8 +694,8 @@ void setup() {
   SPI.begin(SCK, MISO, MOSI);
 
   tft.init();
-  pinMode(26, OUTPUT);
-  digitalWrite(26, HIGH);
+  pinMode(6, OUTPUT);
+  digitalWrite(6, HIGH);
 
   tft.setRotation(0);
   tft.setFreeFont(&FreeSansBold12pt7b);
