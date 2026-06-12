@@ -1,14 +1,20 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <RTClib.h>
+#include <Wire.h>
 #include <FS.h>
 #include <SD.h>
 #include <Audio.h>
 
 #define YELLOW_BTN 16
 #define WHITE_BTN 17
-#define RED_BTN 39
-#define GREEN_BTN 40
+#define RED_BTN 38
+#define GREEN_BTN 37
+
+#define TFT_RST 3
+
+#define RTC_SDA 21
+#define RTC_SCL 12
 
 // SD CARD VARIABLES
 #define REASSIGN_PINS
@@ -20,7 +26,7 @@
 // MAX98357 I2S VARIABLES
 #define I2S_BCLK 14
 #define I2S_LRC  13
-#define I2S_DOUT 35
+#define I2S_DOUT 10
 
 Audio audio;
 String musicFiles[50];
@@ -694,12 +700,14 @@ void setup() {
   SPI.begin(SCK, MISO, MOSI);
 
   tft.init();
-  pinMode(6, OUTPUT);
-  digitalWrite(6, HIGH);
+  pinMode(TFT_RST, OUTPUT);
+  digitalWrite(TFT_RST, HIGH);
 
   tft.setRotation(0);
   tft.setFreeFont(&FreeSansBold12pt7b);
   bmoGreen = tft.color565(150, 240, 186);
+
+  Wire.begin(RTC_SDA, RTC_SCL);
 
   if (! rtc.begin()) {
     // Serial.println("Couldn't find RTC");
@@ -714,7 +722,7 @@ void setup() {
   //rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
 
   // Setup SD Card module
-  if (!SD.begin(5, SPI, 4000000)) {
+  if (!SD.begin(CS, SPI, 4000000)) {
     // Serial.println("SD mount failed");
     while (1);
   }
@@ -724,6 +732,7 @@ void setup() {
 
   BMOidleFace();
   displayRTC();
+  Serial.println("START");
 }
 
 void loop() {

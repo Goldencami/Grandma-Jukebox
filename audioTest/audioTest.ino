@@ -3,7 +3,7 @@
 
 #define I2S_BCLK 14
 #define I2S_LRC  13
-#define I2S_DOUT 33
+#define I2S_DOUT 35
 
 #define SAMPLE_RATE 44100
 #define TONE_FREQ   440    // A4 note

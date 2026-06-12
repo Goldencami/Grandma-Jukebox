@@ -19,7 +19,7 @@ Jukebox to play songs for grandma and pill reminder.
 | `VCC` | `VIN` |
 | `GND` | `GND` |
 | `CS` | `GPIO15` |
-| `RESET` | `GPIO6` |
+| `RESET` | `GPIO8` |
 | `DC` | `GPIO4` |
 | `SDI (MOSI)` | `GPIO11` |
 | `SCK` | `GPIO18` |
@@ -50,7 +50,7 @@ Jukebox to play songs for grandma and pill reminder.
 | `GND` | `GND` |
 | `LRC` | `GPIO13` |
 | `BCLK` | `GPIO14` |
-| `DIN` | `GPIO35` |
+| `DIN` | `GPIO10` |
 
 
 ### BUTTONS
@@ -58,5 +58,5 @@ Jukebox to play songs for grandma and pill reminder.
 |---------|------------|
 | `YELLOW` | `GPIO16` |
 | `WHITE` | `GPIO17` |
-| `RED` | `GPIO39` |
-| `GREEN` | `GPIO40` |
+| `RED` | `GPIO38` |
+| `GREEN` | `GPIO37` |
