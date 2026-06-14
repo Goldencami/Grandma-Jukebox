@@ -19,7 +19,7 @@
 // SD CARD VARIABLES
 #define REASSIGN_PINS
 #define SCK 18
-#define MISO 19
+#define MISO 7
 #define MOSI 11
 #define CS 5
 

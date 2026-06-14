@@ -1,6 +1,8 @@
 # Grandma-Jukebox
 Jukebox to play songs for grandma and pill reminder.
 
+> WARNING: Do **NOT** use GPIO19 or GPIO20 on this board. These GPIOs are internally connected to the USB-OTG and causes the USB no being detected by the computer. IF you accidentally upload a sketch and used those pins, you can upload an empty sketch using USB-UART and the communication with USB-OTG will work again.
+
 ## Materials
 - ESP32-S3-DevKitC-1
 - 3.2" 240x320 SPI FT Display
@@ -30,7 +32,7 @@ Jukebox to play songs for grandma and pill reminder.
 |---------|------------|
 | `GND` | `GND` |
 | `CLK` | `GPIO18` |
-| `MISO` | `GPIO19` |
+| `MISO` | `GPIO6` |
 | `MOSI` | `GPIO11` |
 | `CS` | `GPIO5` |
 | `3.3V` | `3.3V` |
@@ -59,4 +61,4 @@ Jukebox to play songs for grandma and pill reminder.
 | `YELLOW` | `GPIO16` |
 | `WHITE` | `GPIO17` |
 | `RED` | `GPIO38` |
-| `GREEN` | `GPIO37` |
+| `GREEN` | `GPIO9` |
