@@ -4,7 +4,7 @@ Jukebox to play songs for grandma and pill reminder.
 > WARNING: Do **NOT** use GPIO19 or GPIO20 on this board. These GPIOs are internally connected to the USB-OTG and causes the USB no being detected by the computer. IF you accidentally upload a sketch and used those pins, you can upload an empty sketch using USB-UART and the communication with USB-OTG will work again.
 
 ## Materials
-- ESP32-S3-DevKitC-1
+- ESP32-S3 WROOM: Dual-core 32-bit microprocessor up to 240 MHz, 8 MB Flash, 8 MB PSRAM
 - 3.2" 240x320 SPI FT Display
 - DS3231 RTC
 - 2 x MAX98357A I2S
@@ -12,6 +12,15 @@ Jukebox to play songs for grandma and pill reminder.
 - TF Micro SD Card Module
 - 32GB Sandisk Ultra Micro SD card
 - 4 x push buttons
+
+## Enable PSRAM in the IDE
+This project uses PSRAM to play music. 
+
+In Arduino IDE:
+- Tools → PSRAM and set it to "OPI PSRAM"
+- Tools → Flash Size is set to 8MB to match your module.
+
+> These are the PSRAM and Flash size values for the ESP32 that is being used.
 
 ## Pinouts with ESP32
 > TFT and the SD card are sharing the same SPI buses (MOSI, SCK)
