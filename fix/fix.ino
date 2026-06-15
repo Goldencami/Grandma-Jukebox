@@ -91,19 +91,19 @@ unsigned int RTCdelay = 500;
 unsigned long lastRTCdelay = millis();
 
 // BUTTON STATES
-unsigned int debounceDelayYellow = 50;
+unsigned int debounceDelayYellow = 100;
 unsigned long lastYellowDebounce = millis();
 byte yellowBtnState = LOW;
 
-unsigned int debounceDelayWhite = 50;
+unsigned int debounceDelayWhite = 100;
 unsigned long lastWhiteDebounce = millis();
 byte whiteBtnState = LOW;
 
-unsigned int debounceDelayRed = 50;
+unsigned int debounceDelayRed = 100;
 unsigned long lastRedDebounce = millis();
 byte redBtnState = LOW;
 
-unsigned int debounceDelayGreen = 50;
+unsigned int debounceDelayGreen = 100;
 unsigned long lastGreenDebounce = millis();
 byte greenBtnState = LOW;
 
@@ -213,6 +213,7 @@ void selectMusic() {
 
   lastMusicIdx = musicIdx;
 }
+
 int dateIdx = 0;
 void setDate(String *outputArray) {
   if (handleGreenBtn()) {
@@ -330,18 +331,6 @@ int getMaxDays(int month, int year) {
 }
 
 void selectDate() {
-  // if (dateIdx == lastDateIdx) return;
-
-  // eraseDownArrow(60, 90);
-  // eraseDownArrow(153, 90);
-  // eraseDownArrow(208, 90);
-
-  // if (dateIdx == 0) drawDownArrow(60, 90);
-  // else if (dateIdx == 1) drawDownArrow(153, 90);
-  // else drawDownArrow(208, 90);
-
-  // lastDateIdx = dateIdx;
-
   if(dateIdx == 0) {
     eraseDownArrow(208, 90);
     drawDownArrow(60, 90);
@@ -435,18 +424,6 @@ void setHour(String *outputArray) {
 }
 
 void selectHour() {
-  // if (timeIdx == lastTimeIdx) return;
-
-  // eraseDownArrow(93, 90);
-  // eraseDownArrow(139, 90);
-  // eraseDownArrow(175, 90);
-
-  // if (timeIdx == 0) drawDownArrow(93, 90);
-  // else if (timeIdx == 1) drawDownArrow(139, 90);
-  // else drawDownArrow(175, 90);
-
-  // lastTimeIdx = timeIdx;
-
   if(timeIdx == 0) {
     eraseDownArrow(175, 90);
     drawDownArrow(93, 90);
@@ -460,17 +437,6 @@ void selectHour() {
     drawDownArrow(175, 90);
   }
 }
-
-// void playMusic(int index) {
-//   if (index < 0 || index >= fileCount) {
-//     return;
-//   }
-
-//   Serial.print("Playing: ");
-//   Serial.println(musicFiles[index]);
-
-//   audio.connecttoFS(SD, musicFiles[index].c_str());
-// }
 
 void playMusic(int index) {
   audio.stopSong();
@@ -543,8 +509,6 @@ void loadMusicList(File dir) {
 
     entry.close();
   }
-
-  dir.close();
 }
 
 // RTC FUNCTIONS
@@ -582,7 +546,7 @@ void displayRTC() {
   getDate(dateArr, now);
   getHour(hoursArr, now);
 
-  formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + " — " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
+  formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + " - " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
 
   if (formattedTime != previousTime) {
     tft.fillRect(0, 200, 320, 40, bmoGreen); // full clear band
@@ -733,7 +697,7 @@ void setup() {
   bmoGreen = tft.color565(150, 240, 186);
 
   // Setup SD Card module
-  if (!SD.begin(CS, tft.getSPIinstance(), 1000000)) {
+  if (!SD.begin(CS, tft.getSPIinstance(), 4000000)) {
     Serial.println("SD mount failed");
     // while (1);
   }
@@ -812,28 +776,16 @@ void loop() {
     else if (state == AUDIO && !started) {
       // ISSUE IS HERE!!
       Serial.println("Opening root");
-
       File root = SD.open(musicFolder);
-      if (!root) {
-        Serial.println("ROOT FAILED");
-      } else {
+
+      if (root) {
         Serial.println("ROOT OPENED OK");
         loadMusicList(root);
-        root.close();
       }
 
+      musicFolder = "";
       currentSong = 0;
-      if (fileCount > 0) playMusic(currentSong);
-
-      // File root = SD.open(musicFolder);
-
-      // if (root) {        
-      //   loadMusicList(root);
-      // }
-
-      // musicFolder = "";
-      // currentSong = 0;
-      // playMusic(currentSong);
+      playMusic(currentSong);
 
       started = true;
       state = PLAY;

@@ -9,9 +9,10 @@
 #define YELLOW_BTN 16
 #define WHITE_BTN 17
 #define RED_BTN 38
-#define GREEN_BTN 37
+#define GREEN_BTN 9
 
-#define TFT_RST 3
+#define TFT_RST 8
+#define TFT_CS 15
 
 #define RTC_SDA 21
 #define RTC_SCL 12
@@ -19,7 +20,7 @@
 // SD CARD VARIABLES
 #define REASSIGN_PINS
 #define SCK 18
-#define MISO 7
+#define MISO 6
 #define MOSI 11
 #define CS 5
 
@@ -90,19 +91,19 @@ unsigned int RTCdelay = 500;
 unsigned long lastRTCdelay = millis();
 
 // BUTTON STATES
-unsigned int debounceDelayYellow = 50;
+unsigned int debounceDelayYellow = 100;
 unsigned long lastYellowDebounce = millis();
 byte yellowBtnState = LOW;
 
-unsigned int debounceDelayWhite = 50;
+unsigned int debounceDelayWhite = 100;
 unsigned long lastWhiteDebounce = millis();
 byte whiteBtnState = LOW;
 
-unsigned int debounceDelayRed = 50;
+unsigned int debounceDelayRed = 100;
 unsigned long lastRedDebounce = millis();
 byte redBtnState = LOW;
 
-unsigned int debounceDelayGreen = 50;
+unsigned int debounceDelayGreen = 100;
 unsigned long lastGreenDebounce = millis();
 byte greenBtnState = LOW;
 
@@ -212,6 +213,7 @@ void selectMusic() {
 
   lastMusicIdx = musicIdx;
 }
+
 int dateIdx = 0;
 void setDate(String *outputArray) {
   if (handleGreenBtn()) {
@@ -329,18 +331,6 @@ int getMaxDays(int month, int year) {
 }
 
 void selectDate() {
-  // if (dateIdx == lastDateIdx) return;
-
-  // eraseDownArrow(60, 90);
-  // eraseDownArrow(153, 90);
-  // eraseDownArrow(208, 90);
-
-  // if (dateIdx == 0) drawDownArrow(60, 90);
-  // else if (dateIdx == 1) drawDownArrow(153, 90);
-  // else drawDownArrow(208, 90);
-
-  // lastDateIdx = dateIdx;
-
   if(dateIdx == 0) {
     eraseDownArrow(208, 90);
     drawDownArrow(60, 90);
@@ -434,18 +424,6 @@ void setHour(String *outputArray) {
 }
 
 void selectHour() {
-  // if (timeIdx == lastTimeIdx) return;
-
-  // eraseDownArrow(93, 90);
-  // eraseDownArrow(139, 90);
-  // eraseDownArrow(175, 90);
-
-  // if (timeIdx == 0) drawDownArrow(93, 90);
-  // else if (timeIdx == 1) drawDownArrow(139, 90);
-  // else drawDownArrow(175, 90);
-
-  // lastTimeIdx = timeIdx;
-
   if(timeIdx == 0) {
     eraseDownArrow(175, 90);
     drawDownArrow(93, 90);
@@ -459,17 +437,6 @@ void selectHour() {
     drawDownArrow(175, 90);
   }
 }
-
-// void playMusic(int index) {
-//   if (index < 0 || index >= fileCount) {
-//     return;
-//   }
-
-//   Serial.print("Playing: ");
-//   Serial.println(musicFiles[index]);
-
-//   audio.connecttoFS(SD, musicFiles[index].c_str());
-// }
 
 void playMusic(int index) {
   audio.stopSong();
@@ -542,8 +509,6 @@ void loadMusicList(File dir) {
 
     entry.close();
   }
-
-  dir.close();
 }
 
 // RTC FUNCTIONS
@@ -581,7 +546,7 @@ void displayRTC() {
   getDate(dateArr, now);
   getHour(hoursArr, now);
 
-  formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + " — " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
+  formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + " - " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
 
   if (formattedTime != previousTime) {
     tft.fillRect(0, 200, 320, 40, bmoGreen); // full clear band
@@ -603,7 +568,7 @@ bool handleYellowBtn() {
     if(newBtnState != yellowBtnState) {
       yellowBtnState = newBtnState;
       lastYellowDebounce = timeNow;
-      
+
       // because of pullups
       // pressed = LOW
       // released = HIGH
@@ -694,48 +659,42 @@ void setup() {
   audio.setVolume(18);
 
   // FORCE CS pins HIGH BEFORE SPI START
-  pinMode(CS, OUTPUT);
+  pinMode(TFT_CS, OUTPUT);
+  pinMode(CS, OUTPUT); // SD
+  digitalWrite(TFT_CS, HIGH);
   digitalWrite(CS, HIGH);
-
-  SPI.begin(SCK, MISO, MOSI);
-
-  tft.init();
-  pinMode(TFT_RST, OUTPUT);
-  digitalWrite(TFT_RST, HIGH);
-
-  tft.setRotation(0);
-  tft.setFreeFont(&FreeSansBold12pt7b);
-  bmoGreen = tft.color565(150, 240, 186);
 
   Wire.begin(RTC_SDA, RTC_SCL);
 
-  if (! rtc.begin()) {
-    // Serial.println("Couldn't find RTC");
-    while (1);
+  if (!rtc.begin()) {
+    Serial.println("Couldn't find RTC");
   }
 
   // When time needs to be re-set on a previously configured device, the
   // following line sets the RTC to the date & time this sketch was compiled
   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  // This line sets the RTC with an explicit date & time, for example to set
-  // January 21, 2014 at 3am you would call:
-  //rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+
+  tft.init();
+  pinMode(TFT_RST, OUTPUT);
+  digitalWrite(TFT_RST, HIGH);
+  tft.setRotation(0);
+  tft.setFreeFont(&FreeSansBold12pt7b);
+  bmoGreen = tft.color565(150, 240, 186);
 
   // Setup SD Card module
-  if (!SD.begin(CS, SPI, 4000000)) {
-    // Serial.println("SD mount failed");
-    while (1);
+  if (!SD.begin(CS, tft.getSPIinstance(), 4000000)) {
+    Serial.println("SD mount failed");
   }
-  // else {
-  //   Serial.println("SD OK");
-  // }
 
-  BMOidleFace();
   displayRTC();
-  Serial.println("START");
+  BMOidleFace();
+  Serial.println("NEW CODE IS RUNNING");
 }
 
 void loop() {
+  // MUST run on every iteration: feeds the I2S DMA buffer and reads
+  // the next chunk of audio data from SD. Throttling this call (even
+  // to a few times per second) starves audio output almost completely.
   audio.loop();
 
   static unsigned long redHoldStart = 0;
@@ -793,16 +752,19 @@ void loop() {
         else if(musicIdx == 1) {
           musicFolder = "/himnos/";
         }
-        
+
+        Serial.println("green pressed!");
         state = AUDIO;
       }
     }
-    if (state == AUDIO && !started) {
-
+    else if (state == AUDIO && !started) {
+      Serial.println("Opening root");
       File root = SD.open(musicFolder);
 
       if (root) {
+        Serial.println("ROOT OPENED OK");
         loadMusicList(root);
+        root.close();
       }
 
       musicFolder = "";
