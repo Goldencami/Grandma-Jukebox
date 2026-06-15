@@ -107,7 +107,7 @@ unsigned int debounceDelayGreen = 100;
 unsigned long lastGreenDebounce = millis();
 byte greenBtnState = LOW;
 
-// BMO FUNCTIONS
+// BMO DRAW FUNCTIONS
 void drawSmile(int cx, int cy, int r) {
   for (int a = 20; a <= 160; a++) {
     float rad = a * DEG_TO_RAD;
@@ -181,6 +181,28 @@ void eraseDownArrow(int width, int y) {
   );
 }
 
+void drawSong(String path) {
+  int secondIndex = path.indexOf("/", path.indexOf("/") + 1);
+
+  String songMP3 = path.substring(secondIndex + 1);
+  String title = songMP3.substring(0, songMP3.length()-4);
+
+  // convention title is: artistName - songName
+  int dashIdx = title.indexOf("-");
+  String artist = title.substring(0, dashIdx - 2);
+  String song = title.substring(dashIdx + 2, title.length());
+
+  tft.fillRect(0, 0, 320, 130, bmoGreen);
+  tft.setTextColor(TFT_BLACK, bmoGreen);
+
+  tft.setCursor((320 - tft.textWidth(song)) / 2, 70);
+  tft.print(song);
+
+  tft.setCursor((320 - tft.textWidth(artist)) / 2, 120);
+  tft.print(artist);
+}
+
+// MUSIC FUNCTIONS
 int musicIdx = 0;
 void displayMusicTypes() {
   tft.fillScreen(bmoGreen);
@@ -200,20 +222,47 @@ void displayMusicTypes() {
 void selectMusic() {
   if (handleWhiteBtn()) {
     musicIdx = (musicIdx + 1) % 2;
+    // erase both first
+    eraseArrow(135, 90);
+    eraseArrow(200, 120);
   }
 
-  if (musicIdx == lastMusicIdx) return; // no redraw and avoids glitching screen
-
-  // erase both first
-  eraseArrow(135, 90);
-  eraseArrow(200, 120);
-
+  // if (musicIdx == lastMusicIdx) return; // no redraw and avoids glitching screen
   if (musicIdx == 0) drawArrow(135, 90);
   else drawArrow(200, 120);
-
-  lastMusicIdx = musicIdx;
+  // lastMusicIdx = musicIdx;
 }
 
+void playMusic(int index) {
+  String path = musicFiles[index];
+
+  audio.stopSong();
+  audio.connecttoFS(SD, path.c_str());
+
+  drawSong(path);
+}
+
+void nextSong() {
+  currentSong++;
+
+  if(currentSong >= fileCount) {
+    currentSong = 0;
+  }
+
+  playMusic(currentSong);
+}
+
+void previousSong() {
+  currentSong--;
+
+  if(currentSong < 0) {
+    currentSong = fileCount - 1;
+  }
+  
+  playMusic(currentSong);
+}
+
+// RTC FUNCTIONS
 int dateIdx = 0;
 void setDate(String *outputArray) {
   if (handleGreenBtn()) {
@@ -438,31 +487,6 @@ void selectHour() {
   }
 }
 
-void playMusic(int index) {
-  audio.stopSong();
-  audio.connecttoFS(SD, "/himnos/Carlos Vives - La Gota Fria.wav");
-}
-
-void nextSong() {
-  currentSong++;
-
-  if(currentSong >= fileCount) {
-    currentSong = 0;
-  }
-
-  playMusic(currentSong);
-}
-
-void previousSong() {
-  currentSong--;
-
-  if(currentSong < 0) {
-    currentSong = fileCount - 1;
-  }
-  
-  playMusic(currentSong);
-}
-
 // SD CARD FUNCTIONS
 void readDirectory(File dir, int numTabs) {
   while (true) {
@@ -669,10 +693,16 @@ void setup() {
   if (!rtc.begin()) {
     Serial.println("Couldn't find RTC");
   }
-
-  // When time needs to be re-set on a previously configured device, the
-  // following line sets the RTC to the date & time this sketch was compiled
-  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  else {
+    // Only set the time if the RTC lost power (no battery / first boot).
+    // Otherwise leave its own running clock alone.
+    if(rtc.lostPower()) {
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+  }
+  // // When time needs to be re-set on a previously configured device, the
+  // // following line sets the RTC to the date & time this sketch was compiled
+  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
   tft.init();
   pinMode(TFT_RST, OUTPUT);
@@ -686,9 +716,8 @@ void setup() {
     Serial.println("SD mount failed");
   }
 
-  displayRTC();
   BMOidleFace();
-  Serial.println("NEW CODE IS RUNNING");
+  displayRTC();
 }
 
 void loop() {
@@ -720,6 +749,8 @@ void loop() {
   if(state == IDLE) {
     if(!isIdleScreenDisplayed) {
       BMOidleFace();
+      previousTime = ""; // force immediate RTC redraw after screen wipe
+      displayRTC();
       isIdleScreenDisplayed = true;
     }
 
@@ -733,6 +764,8 @@ void loop() {
     if(state == SELECTION) {
       if(!isMusicTypeDisplayed) {
         displayMusicTypes();
+        previousTime = ""; // force immediate RTC redraw after screen wipe
+        displayRTC();
         isMusicTypeDisplayed = true;
       }
 
@@ -741,8 +774,8 @@ void loop() {
       if(handleRedBtn()) {
         musicIdx = 0;
         isMusicTypeDisplayed = false;
-        state = IDLE;
         started = false;
+        state = IDLE;
       }
 
       if(handleGreenBtn()) {
@@ -753,16 +786,13 @@ void loop() {
           musicFolder = "/himnos/";
         }
 
-        Serial.println("green pressed!");
         state = AUDIO;
       }
     }
     else if (state == AUDIO && !started) {
-      Serial.println("Opening root");
       File root = SD.open(musicFolder);
 
       if (root) {
-        Serial.println("ROOT OPENED OK");
         loadMusicList(root);
         root.close();
       }
@@ -779,19 +809,20 @@ void loop() {
         audio.pauseResume();   // PLAY/PAUSE
       }
 
-      // if(handleWhiteBtn()) {
-      //   nextSong();
-      // }
+      if(handleWhiteBtn()) {
+        nextSong();
+      }
 
-      // if(handleYellowBtn()) {
-      //   previousSong();
-      // }
+      if(handleYellowBtn()) {
+        previousSong();
+      }
 
       if(handleRedBtn()) {
+        audio.stopSong();
         musicIdx = 0;
         isMusicTypeDisplayed = false;
-        state = IDLE;
         started = false;
+        state = IDLE;
       }
     }
     else if(state == CONFIGS) {
@@ -817,8 +848,8 @@ void loop() {
         isSetHourDone = false;
         isConfigScreenDisplayed = false;
 
-        state = IDLE;
         started = false;
+        state = IDLE;
       }
 
       if(!isSetDateDone && !isSetHourDone) {
