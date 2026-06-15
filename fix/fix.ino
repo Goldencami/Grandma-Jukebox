@@ -568,7 +568,7 @@ bool handleYellowBtn() {
     if(newBtnState != yellowBtnState) {
       yellowBtnState = newBtnState;
       lastYellowDebounce = timeNow;
-
+      
       // because of pullups
       // pressed = LOW
       // released = HIGH
@@ -664,15 +664,30 @@ void setup() {
   digitalWrite(TFT_CS, HIGH);
   digitalWrite(CS, HIGH);
 
+  // SPI.begin(SCK, MISO, MOSI);
+
+  // delay(50);
+
   Wire.begin(RTC_SDA, RTC_SCL);
 
   if (!rtc.begin()) {
     Serial.println("Couldn't find RTC");
+    // while (1);
   }
+  // else {
+  //   // ONLY set time if RTC lost power
+  //   if (!rtc.isrunning()) {
+  //     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  //   }
+  // }
 
   // When time needs to be re-set on a previously configured device, the
   // following line sets the RTC to the date & time this sketch was compiled
   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // This line sets the RTC with an explicit date & time, for example to set
+  // January 21, 2014 at 3am you would call:
+  //rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+
 
   tft.init();
   pinMode(TFT_RST, OUTPUT);
@@ -684,7 +699,11 @@ void setup() {
   // Setup SD Card module
   if (!SD.begin(CS, tft.getSPIinstance(), 4000000)) {
     Serial.println("SD mount failed");
+    // while (1);
   }
+  // else {
+  //   Serial.println("SD OK");
+  // }
 
   displayRTC();
   BMOidleFace();
@@ -692,9 +711,6 @@ void setup() {
 }
 
 void loop() {
-  // MUST run on every iteration: feeds the I2S DMA buffer and reads
-  // the next chunk of audio data from SD. Throttling this call (even
-  // to a few times per second) starves audio output almost completely.
   audio.loop();
 
   static unsigned long redHoldStart = 0;
@@ -752,19 +768,19 @@ void loop() {
         else if(musicIdx == 1) {
           musicFolder = "/himnos/";
         }
-
+        
         Serial.println("green pressed!");
         state = AUDIO;
       }
     }
     else if (state == AUDIO && !started) {
+      // ISSUE IS HERE!!
       Serial.println("Opening root");
       File root = SD.open(musicFolder);
 
       if (root) {
         Serial.println("ROOT OPENED OK");
         loadMusicList(root);
-        root.close();
       }
 
       musicFolder = "";

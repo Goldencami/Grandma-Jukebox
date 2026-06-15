@@ -1,8 +1,10 @@
 # Grandma-Jukebox
 Jukebox to play songs for grandma and pill reminder.
 
+> WARNING: Do **NOT** use GPIO19 or GPIO20 on this board. These GPIOs are internally connected to the USB-OTG and causes the USB no being detected by the computer. IF you accidentally upload a sketch and used those pins, you can upload an empty sketch using USB-UART and the communication with USB-OTG will work again.
+
 ## Materials
-- DOIT ESP32 DEVKIT V1
+- ESP32-S3-DevKitC-1
 - 3.2" 240x320 SPI FT Display
 - DS3231 RTC
 - 2 x MAX98357A I2S
@@ -19,9 +21,9 @@ Jukebox to play songs for grandma and pill reminder.
 | `VCC` | `VIN` |
 | `GND` | `GND` |
 | `CS` | `GPIO15` |
-| `RESET` | `GPIO26` |
-| `DC` | `GPIO25` |
-| `SDI (MOSI)` | `GPIO23` |
+| `RESET` | `GPIO8` |
+| `DC` | `GPIO4` |
+| `SDI (MOSI)` | `GPIO11` |
 | `SCK` | `GPIO18` |
 | `LED` | `3.3V` |
 
@@ -30,8 +32,8 @@ Jukebox to play songs for grandma and pill reminder.
 |---------|------------|
 | `GND` | `GND` |
 | `CLK` | `GPIO18` |
-| `MISO` | `GPIO19` |
-| `MOSI` | `GPIO23` |
+| `MISO` | `GPIO6` |
+| `MOSI` | `GPIO11` |
 | `CS` | `GPIO5` |
 | `3.3V` | `3.3V` |
 
@@ -41,7 +43,7 @@ Jukebox to play songs for grandma and pill reminder.
 | `GND` | `GND` |
 | `VCC` | `VIN` |
 | `SDA` | `GPIO21` |
-| `SCL` | `GPIO22` |
+| `SCL` | `GPIO12` |
 
 ### MAX98357 I2S
 | MAX98357 I2S | ESP32 |
@@ -50,7 +52,7 @@ Jukebox to play songs for grandma and pill reminder.
 | `GND` | `GND` |
 | `LRC` | `GPIO13` |
 | `BCLK` | `GPIO14` |
-| `DIN` | `GPIO33` |
+| `DIN` | `GPIO10` |
 
 
 ### BUTTONS
@@ -58,5 +60,5 @@ Jukebox to play songs for grandma and pill reminder.
 |---------|------------|
 | `YELLOW` | `GPIO16` |
 | `WHITE` | `GPIO17` |
-| `RED` | `GPIO27` |
-| `GREEN` | `GPIO32` |
+| `RED` | `GPIO38` |
+| `GREEN` | `GPIO9` |
