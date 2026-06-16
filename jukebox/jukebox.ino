@@ -262,6 +262,11 @@ void previousSong() {
   playMusic(currentSong);
 }
 
+// Called automatically by the Audio library when a track finishes
+void audio_eof_mp3(const char *info) {
+  nextSong();
+}
+
 // RTC FUNCTIONS
 int dateIdx = 0;
 void setDate(String *outputArray) {
