@@ -23,6 +23,8 @@ In Arduino IDE:
 > These are the PSRAM and Flash size values for the ESP32 that is being used.
 
 ## Pinouts with ESP32
+<img width="1637" height="727" alt="Image" src="https://github.com/user-attachments/assets/1d34ac77-a264-4828-980a-de5787600532" />
+
 > TFT and the SD card are sharing the same SPI buses (MOSI, SCK)
 ### SPI TFT Screen
 | SPI TFT | ESP32 |
