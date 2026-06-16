@@ -7,8 +7,8 @@ Jukebox to play songs for grandma and pill reminder.
 - ESP32-S3 WROOM: Dual-core 32-bit microprocessor up to 240 MHz, 8 MB Flash, 8 MB PSRAM
 - 3.2" 240x320 SPI FT Display
 - DS3231 RTC
-- 2 x MAX98357A I2S
-- 2 x 3525 4ohm 3W-2.0port
+- MAX98357A I2S
+- 3525 4ohm 3W-2.0port
 - TF Micro SD Card Module
 - 32GB Sandisk Ultra Micro SD card
 - 4 x push buttons
