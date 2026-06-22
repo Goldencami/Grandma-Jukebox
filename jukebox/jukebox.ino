@@ -315,10 +315,8 @@ void nextSong() {
 }
 
 void previousSong() {
+  if (currentSong <= 0) return; // already at the first song, do nothing
   currentSong--;
-  if (currentSong < 0) {
-    currentSong = 0;
-  }
   playMusic(currentSong);
 }
 
@@ -900,8 +898,10 @@ void loop() {
 
       if(fileCount > 0) {
         currentSong = 0;
+        isMusicTypeDisplayed = false;
         state = PLAY;
         playMusic(currentSong);   // drawSong() runs here on Core 1. Actual MP3 decode runs on Core 0
+        lastGreenDebounce = millis();
       } else {
         Serial.println("No MP3 files found in folder");
       }
