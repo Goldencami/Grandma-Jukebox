@@ -1,96 +1,40 @@
 #include <SPI.h>
-#include <TFT_eSPI.h>
-#include <RTClib.h>
-#include <Wire.h>
-#include <FS.h>
 #include <SD.h>
-#include <Audio.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7789.h>
+#include <Wire.h>
+#include <RTClib.h>
+#include <AudioFileSourceSD.h>
+#include <AudioGeneratorMP3.h>
+#include <AudioOutputI2S.h>
+#include "esp_task_wdt.h"
+#include "esp_log.h"
+#include <Fonts/FreeSansBold12pt7b.h> 
 
 #define YELLOW_BTN 16
 #define WHITE_BTN 17
 #define RED_BTN 38
-#define GREEN_BTN 9
+#define GREEN_BTN 1
 
-#define TFT_RST 8
-#define TFT_CS 15
+#define I2S_LRC  13
+#define I2S_BCLK 14
+#define I2S_DOUT 9
 
 #define RTC_SDA 21
-#define RTC_SCL 12
+#define RTC_SCL 47
 
-// SD CARD VARIABLES
-#define REASSIGN_PINS
-#define SCK 18
-#define MISO 6
-#define MOSI 11
-#define CS 5
+#define SD_SCK   39
+#define SD_MISO  40
+#define SD_MOSI  41
+#define SD_CS    10
 
-// MAX98357 I2S VARIABLES
-#define I2S_BCLK 14
-#define I2S_LRC  13
-#define I2S_DOUT 10
+#define TFT_CS   15
+#define TFT_DC    4
+#define TFT_RST   8
+#define TFT_MOSI 11
+#define TFT_SCLK 12
 
-Audio audio;
-String musicFiles[50];
-String musicFolder = "";
-int fileCount = 0;
-int currentSong = 0;
-
-// TFT VARIABLE
-TFT_eSPI tft = TFT_eSPI(320, 240);
-
-// RTC VARIABLE
-RTC_DS3231 rtc;
-String formattedTime = "";
-String previousTime = "";
-String dateArr[3]; // [month, day, year]
-String hoursArr[3]; // [hour, minute, AM/PM]
-String tempDateArr[3];
-String tempHourArr[3];
-bool isSetDateDone = false;
-bool isSetHourDone = false;
-
-int lastSec = -1;
-int lastMin = -1;
-int lastHour = -1;
-int lastDay = -1;
-int lastMonth = -1;
-int lastYear = -1;
-
-char timeBuffer[20];
-char dateBuffer[30];
-
-// Convert month number to Spanish month name
-const char* months[] = {"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
-int monthIdx = 0;
-
-// STATE MACHINE VARIABLES
-enum State {
-  IDLE,
-  SELECTION,
-  PLAY,
-  AUDIO,
-  CONFIGS
-};
-
-State state = IDLE;
-
-bool isIdleScreenDisplayed = false;
-bool isMusicTypeDisplayed = false;
-bool isConfigScreenDisplayed = false;
-
-bool started = false;
-int lastMusicIdx = -1;
-int lastDateIdx = -1;
-int lastTimeIdx = -1;
-
-// BMO COLOURS
-uint16_t bmoGreen;
-
-// RTC DELAY
-unsigned int RTCdelay = 500;
-unsigned long lastRTCdelay = millis();
-
-// BUTTON STATES
+// TIME VARIABLES
 unsigned int debounceDelayYellow = 100;
 unsigned long lastYellowDebounce = millis();
 byte yellowBtnState = LOW;
@@ -107,7 +51,69 @@ unsigned int debounceDelayGreen = 100;
 unsigned long lastGreenDebounce = millis();
 byte greenBtnState = LOW;
 
-// BMO DRAW FUNCTIONS
+unsigned int RTCdelay = 500;
+unsigned long lastRTCdelay = millis();
+
+// MAX98357 I2S VARIABLES
+String musicFiles[50];
+int fileCount = 0;
+int currentSong = 0;
+
+// AUDIO OBJECTS (ESP8266Audio — runs on Core 0 via audioTask)
+AudioGeneratorMP3 *mp3       = nullptr;
+AudioFileSourceSD *audioSrc  = nullptr;
+AudioOutputI2S    *audioOut  = nullptr;
+
+// Shared state between loop() on Core 1 and audioTask on Core 0.
+// Protected by audioMutex to avoid race conditions.
+volatile bool audioShouldPlay = false;   // Core 1 sets true to start a song
+volatile bool audioShouldStop = false;   // Core 1 sets true to stop mid-song
+volatile bool audioIsPlaying  = false;   // Core 0 sets true while decoding
+volatile bool audioPaused     = false;   // Core 1 toggles to pause/resume
+volatile int  audioTrackIndex = 0;       // which track to play
+SemaphoreHandle_t audioMutex;
+TaskHandle_t audioTaskHandle = nullptr;
+
+// RTC VARIABLES
+RTC_DS3231 rtc;
+String previousTime = "-1";
+String dateArr[3]; // [month, day, year]
+String hoursArr[3]; // [hour, minute, AM/PM]
+String tempDateArr[3];
+String tempHourArr[3];
+bool isSetDateDone = false;
+bool isSetHourDone = false;
+
+int lastDateIdx = -1;
+int lastTimeIdx = -1;
+
+// Convert month number to Spanish month name
+const char* months[] = {"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
+int monthIdx = 0;
+
+// SD CARD VARIABLES
+SPIClass sdSPI(HSPI);   // plain object, not a pointer - no TFT in this sketch to order against
+
+// TFT VARIABLES
+Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+
+// STATE MACHINE VARIABLES
+enum State {
+  IDLE,
+  SELECTION,
+  PLAY,
+  CONFIGS
+};
+
+State state = IDLE;
+
+bool isIdleScreenDisplayed = false;
+bool isMusicTypeDisplayed = false;
+bool isConfigScreenDisplayed = false;
+
+// BMO FUNCTIONS
+uint16_t bmoGreen;
+
 void drawSmile(int cx, int cy, int r) {
   for (int a = 20; a <= 160; a++) {
     float rad = a * DEG_TO_RAD;
@@ -115,7 +121,7 @@ void drawSmile(int cx, int cy, int r) {
     int x = cx + r * cos(rad);
     int y = cy + r * sin(rad);
 
-    tft.fillCircle(x, y, 2, TFT_BLACK);
+    tft.fillCircle(x, y, 2, ST77XX_BLACK);
   }
 }
 
@@ -125,13 +131,14 @@ void BMOidleFace() {
 
   // background
   tft.fillScreen(bmoGreen);
+  previousTime = "-1";   // force RTC to redraw on next tick — fillScreen wiped it
 
   // eye settings
   int eyeR = 7;
   int eyeY = h * 0.35;
 
-  tft.fillCircle(w * 0.3, eyeY, eyeR, TFT_BLACK);
-  tft.fillCircle(w * 0.7, eyeY, eyeR, TFT_BLACK);
+  tft.fillCircle(w * 0.3, eyeY, eyeR, ST77XX_BLACK);
+  tft.fillCircle(w * 0.7, eyeY, eyeR, ST77XX_BLACK);
 
   // smile :)
   drawSmile(w / 2, h * 0.43, 40);
@@ -144,7 +151,7 @@ void drawArrow(int width, int y) {
     x, y - 8,
     x + 10, y - 15,
     x + 10, y + 2,
-    TFT_BLACK
+    ST77XX_BLACK
   );
 }
 
@@ -166,7 +173,7 @@ void drawDownArrow(int width, int y) {
     x,      y - 10,  // top-left of base
     x + 10, y - 10,  // top-right of base
     x + 5,  y,       // bottom tip
-    TFT_BLACK
+    ST77XX_BLACK
   );
 }
 
@@ -193,21 +200,39 @@ void drawSong(String path) {
   String song = title.substring(dashIdx + 2, title.length());
 
   tft.fillRect(0, 0, 320, 130, bmoGreen);
-  tft.setTextColor(TFT_BLACK, bmoGreen);
+  tft.setTextColor(ST77XX_BLACK, bmoGreen);
 
-  tft.setCursor((320 - tft.textWidth(song)) / 2, 70);
+  int16_t x1, y1;
+  uint16_t w, h;
+
+  // Center song title
+  tft.getTextBounds(song, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor((320 - w) / 2, 70);
   tft.print(song);
 
-  tft.setCursor((320 - tft.textWidth(artist)) / 2, 120);
+  // Center artist name
+  tft.getTextBounds(artist, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor((320 - w) / 2, 120);
   tft.print(artist);
+}
+
+void displayConfigs() {
+  tft.fillScreen(bmoGreen);
+  tft.setCursor(20, 40);
+  tft.print("Configuraciones");
+
+  DateTime now = rtc.now();
+  getDate(tempDateArr, now);
+  getHour(tempHourArr, now);
 }
 
 // MUSIC FUNCTIONS
 int musicIdx = 0;
 void displayMusicTypes() {
   tft.fillScreen(bmoGreen);
+  previousTime = "-1";   // force RTC to redraw on next tick — fillScreen wiped it
 
-  tft.setTextColor(TFT_BLACK);
+  tft.setTextColor(ST77XX_BLACK);
 
   tft.setCursor(20, 40);
   tft.print("Reproductor de musica");
@@ -227,44 +252,76 @@ void selectMusic() {
     eraseArrow(200, 120);
   }
 
-  // if (musicIdx == lastMusicIdx) return; // no redraw and avoids glitching screen
-  if (musicIdx == 0) drawArrow(135, 90);
-  else drawArrow(200, 120);
-  // lastMusicIdx = musicIdx;
+  if (musicIdx == 0) {
+    drawArrow(135, 90);
+  }
+  else  {
+    drawArrow(200, 120);
+  }
 }
 
 void playMusic(int index) {
   String path = musicFiles[index];
 
-  audio.stopSong();
-  audio.connecttoFS(SD, path.c_str());
+  // Signal Core 0 audio task to play this track.
+  // drawSong() runs here on Core 1 — completely separate from audio decoding.
+  xSemaphoreTake(audioMutex, portMAX_DELAY);
+  audioTrackIndex  = index;
+  audioShouldStop  = true; // stop any currently playing track first
+  audioShouldPlay  = true; // then start the new one
+  xSemaphoreGive(audioMutex);
 
-  drawSong(path);
+  previousTime = "-1";   // force RTC to redraw after drawSong updates the screen
+  drawSong(path);      // update screen immediately, doesn't wait for audio
+}
+
+void stopMusic() {
+  xSemaphoreTake(audioMutex, portMAX_DELAY);
+  audioShouldStop = true;
+  audioShouldPlay = false;
+  xSemaphoreGive(audioMutex);
+}
+
+void pauseResumeMusic() {
+  xSemaphoreTake(audioMutex, portMAX_DELAY);
+  audioPaused = !audioPaused;
+  xSemaphoreGive(audioMutex);
+  Serial.printf("Audio %s\n", audioPaused ? "paused" : "resumed");
+}
+
+// Called by audioTask on Core 0 when a track finishes naturally
+void onTrackFinished() {
+  currentSong++;
+  if (currentSong >= fileCount) {
+    currentSong = 0;
+    state = IDLE;
+  } else {
+    playMusic(currentSong);
+  }
 }
 
 void nextSong() {
   currentSong++;
-
-  if(currentSong >= fileCount) {
+  if (currentSong >= fileCount) {
+    stopMusic();
     currentSong = 0;
+    state = IDLE;
+  } else {
+    playMusic(currentSong);
   }
-
-  playMusic(currentSong);
 }
 
 void previousSong() {
   currentSong--;
-
-  if(currentSong < 0) {
-    currentSong = fileCount - 1;
+  if (currentSong < 0) {
+    currentSong = 0;
   }
-  
   playMusic(currentSong);
 }
 
 // Called automatically by the Audio library when a track finishes
 void audio_eof_mp3(const char *info) {
-  nextSong();
+  onTrackFinished();
 }
 
 // RTC FUNCTIONS
@@ -359,7 +416,11 @@ void setDate(String *outputArray) {
 
   int regionX = 40;
   int regionW = 100;
-  int textW = tft.textWidth(month);
+  int16_t x1, y1;
+  uint16_t w, h;
+
+  tft.getTextBounds(month, 0, 0, &x1, &y1, &w, &h);
+  int textW = w;
   int x = regionX + (regionW - textW) / 2;
 
   tft.setCursor(x, 120);
@@ -492,55 +553,6 @@ void selectHour() {
   }
 }
 
-// SD CARD FUNCTIONS
-void readDirectory(File dir, int numTabs) {
-  while (true) {
-    File entry = dir.openNextFile();
-
-    if (!entry) {
-      break;
-    }
-
-    for (uint8_t i = 0; i < numTabs; i++) {
-      Serial.print('\t');
-    }
-    Serial.print(entry.name());
-
-    if (entry.isDirectory()) {
-      Serial.println("/");
-      readDirectory(entry, numTabs + 1);
-    } else {
-      Serial.print("\t\t");
-      Serial.println(entry.size(), DEC);
-    }
-    entry.close();
-  }
-  dir.close();
-}
-
-void loadMusicList(File dir) {
-  fileCount = 0;
-
-  while (true) {
-    File entry = dir.openNextFile();
-
-    if (!entry) {
-      break;
-    }
-
-    if (!entry.isDirectory()) {
-      String name = entry.name();
-
-      if (name.endsWith(".mp3") || name.endsWith(".MP3")) {
-        musicFiles[fileCount++] = musicFolder + name;
-      }
-    }
-
-    entry.close();
-  }
-}
-
-// RTC FUNCTIONS
 void getDate(String *outputArray, DateTime now) {
   String yearStr = String(now.year());
   String dayStr = (now.day() < 10 ? "0" : "") + String(now.day());
@@ -571,17 +583,22 @@ void getHour(String *outputArray, DateTime now) {
 
 void displayRTC() {
   DateTime now = rtc.now();
-
   getDate(dateArr, now);
   getHour(hoursArr, now);
-
-  formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + " - " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
+  String formattedTime = dateArr[0] + " " + dateArr[1] + ", " + dateArr[2] + " - " + hoursArr[0] + ":" + hoursArr[1] + " " + hoursArr[2];
 
   if (formattedTime != previousTime) {
-    tft.fillRect(0, 200, 320, 40, bmoGreen); // full clear band
-    tft.setTextColor(TFT_BLACK, bmoGreen);
-    tft.setCursor(12, 220);
-    tft.print(formattedTime);
+    tft.fillRect(0, 200, 320, 40, bmoGreen);
+    tft.setTextColor(ST77XX_BLACK, bmoGreen);
+
+    // measure to center text
+    int16_t x1, y1;
+    uint16_t w, h;
+    tft.getTextBounds(formattedTime, 0, 0, &x1, &y1, &w, &h);
+    int centeredX = (320 - w) / 2;
+
+    tft.setCursor(centeredX, 220);
+    tft.print(formattedTime); 
 
     previousTime = formattedTime;
   }
@@ -676,6 +693,91 @@ bool handleGreenBtn() {
   return false;
 }
 
+// ============================================================
+// Core 0 — Audio task: decodes MP3 and feeds I2S
+// Never touches TFT — completely isolated from Core 1 UI work
+// ============================================================
+void audioTask(void* param) {
+  audioOut = new AudioOutputI2S();
+  audioOut->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  audioOut->SetGain(0.5);
+
+  for (;;) {
+    // --- Check if we should start a new track ---
+    xSemaphoreTake(audioMutex, portMAX_DELAY);
+    bool shouldPlay = audioShouldPlay;
+    bool shouldStop = audioShouldStop;
+    int  trackIdx   = audioTrackIndex;
+    if (shouldPlay)  audioShouldPlay = false;
+    if (shouldStop)  audioShouldStop = false;
+    xSemaphoreGive(audioMutex);
+
+    // Stop currently playing track if requested
+    if (shouldStop && mp3 && mp3->isRunning()) {
+      mp3->stop();
+      delete mp3;      mp3      = nullptr;
+      delete audioSrc; audioSrc = nullptr;
+      xSemaphoreTake(audioMutex, portMAX_DELAY);
+      audioIsPlaying = false;
+      xSemaphoreGive(audioMutex);
+    }
+
+    // Start new track
+    if (shouldPlay && trackIdx < fileCount) {
+      String path = musicFiles[trackIdx];
+      audioSrc = new AudioFileSourceSD(path.c_str());
+      mp3      = new AudioGeneratorMP3();
+      mp3->begin(audioSrc, audioOut);
+      xSemaphoreTake(audioMutex, portMAX_DELAY);
+      audioIsPlaying = true;
+      xSemaphoreGive(audioMutex);
+      Serial.printf("Now playing: %s\n", path.c_str());
+    }
+
+    // Run one decode loop iteration if playing
+    if (mp3 && mp3->isRunning()) {
+      if (!mp3->loop()) {
+        // Track finished naturally
+        mp3->stop();
+        delete mp3;      mp3      = nullptr;
+        delete audioSrc; audioSrc = nullptr;
+        xSemaphoreTake(audioMutex, portMAX_DELAY);
+        audioIsPlaying = false;
+        xSemaphoreGive(audioMutex);
+        // Notify Core 1 that the track ended
+        onTrackFinished();
+      }
+    } else {
+      // Nothing playing — yield so Core 1 isn't starved
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+  }
+}
+
+void loadMusicFiles(String folder) {
+  fileCount = 0;
+
+  File dir = SD.open(folder);
+  if (!dir || !dir.isDirectory()) {
+    Serial.printf("Folder not found: %s\n", folder.c_str());
+    return;
+  }
+
+  File entry = dir.openNextFile();
+  while (entry && fileCount < 50) {
+    if (!entry.isDirectory()) {
+      String name = entry.name();
+      if (name.endsWith(".mp3") || name.endsWith(".MP3")) {
+        musicFiles[fileCount++] = folder + "/" + name;
+      }
+    }
+    entry.close();
+    entry = dir.openNextFile();
+  }
+  dir.close();
+  Serial.printf("Loaded %d tracks from %s\n", fileCount, folder.c_str());
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -684,17 +786,23 @@ void setup() {
   pinMode(RED_BTN, INPUT_PULLUP);
   pinMode(GREEN_BTN, INPUT_PULLUP);
 
-  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-  audio.setVolume(18);
+  sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 
-  // FORCE CS pins HIGH BEFORE SPI START
-  pinMode(TFT_CS, OUTPUT);
-  pinMode(CS, OUTPUT); // SD
-  digitalWrite(TFT_CS, HIGH);
-  digitalWrite(CS, HIGH);
+  if (!SD.begin(SD_CS, sdSPI, 20000000)) {
+    Serial.println("SD Card Mount Failed!");
+    return;
+  }
+  Serial.println("SD Card mounted successfully");
+
+  bmoGreen = tft.color565(150, 240, 186);
+
+  tft.init(240, 320);     // ST7789 needs explicit native resolution passed here
+  tft.invertDisplay(false);  // counteract library's default ST77XX_INVON
+  tft.setRotation(1);
+  tft.setFont(&FreeSansBold12pt7b);
+  tft.setTextSize(1);
 
   Wire.begin(RTC_SDA, RTC_SCL);
-
   if (!rtc.begin()) {
     Serial.println("Couldn't find RTC");
   }
@@ -705,32 +813,26 @@ void setup() {
       rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
     }
   }
-  // // When time needs to be re-set on a previously configured device, the
-  // // following line sets the RTC to the date & time this sketch was compiled
-  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-
-  tft.init();
-  pinMode(TFT_RST, OUTPUT);
-  digitalWrite(TFT_RST, HIGH);
-  tft.setRotation(0);
-  tft.setFreeFont(&FreeSansBold12pt7b);
-  bmoGreen = tft.color565(150, 240, 186);
-
-  // Setup SD Card module
-  if (!SD.begin(CS, tft.getSPIinstance(), 4000000)) {
-    Serial.println("SD mount failed");
-  }
 
   BMOidleFace();
   displayRTC();
+
+  // ---- Reconfigure watchdog BEFORE launching audio task ----
+  // mp3->loop() runs continuously on Core 0 and will starve IDLE0.
+  // Reconfigure TWDT to not monitor Core 0's IDLE task, and disable panic.
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms      = 30000,    // 30s timeout — never fires during decode
+    .idle_core_mask  = (1 << 1), // watch Core 1 IDLE only, not Core 0
+    .trigger_panic   = false     // warn only, never abort
+  };
+  esp_task_wdt_reconfigure(&wdt_config);
+
+  // ---- Create mutex and launch audio task on Core 0 ----
+  audioMutex = xSemaphoreCreateMutex();
+  xTaskCreatePinnedToCore(audioTask, "AudioTask", 8192, NULL, 2, &audioTaskHandle, 0);
 }
 
 void loop() {
-  // MUST run on every iteration: feeds the I2S DMA buffer and reads
-  // the next chunk of audio data from SD. Throttling this call (even
-  // to a few times per second) starves audio output almost completely.
-  audio.loop();
-
   static unsigned long redHoldStart = 0;
 
   if (digitalRead(RED_BTN) == LOW) {
@@ -753,9 +855,7 @@ void loop() {
 
   if(state == IDLE) {
     if(!isIdleScreenDisplayed) {
-      BMOidleFace();
-      previousTime = ""; // force immediate RTC redraw after screen wipe
-      displayRTC();
+      BMOidleFace(); // also resets previousTime so RTC redraws immediately
       isIdleScreenDisplayed = true;
     }
 
@@ -763,119 +863,91 @@ void loop() {
       state = SELECTION;
     }
   }
-  else {
+  else if(state == SELECTION) {
     isIdleScreenDisplayed = false;
 
-    if(state == SELECTION) {
-      if(!isMusicTypeDisplayed) {
-        displayMusicTypes();
-        previousTime = ""; // force immediate RTC redraw after screen wipe
-        displayRTC();
-        isMusicTypeDisplayed = true;
-      }
+    if(!isMusicTypeDisplayed) {
+      displayMusicTypes();
+      isMusicTypeDisplayed = true;
+    }
 
-      selectMusic();
+    selectMusic();
 
-      if(handleRedBtn()) {
-        musicIdx = 0;
-        isMusicTypeDisplayed = false;
-        started = false;
-        state = IDLE;
-      }
+    if(handleRedBtn()) {
+      musicIdx = 0;
+      isMusicTypeDisplayed = false;
+      state = IDLE;
+    }
 
-      if(handleGreenBtn()) {
-        if(musicIdx == 0) {
-          musicFolder = "/canciones/";
-        }
-        else if(musicIdx == 1) {
-          musicFolder = "/himnos/";
-        }
+    // GREEN confirms selection — load the chosen folder and start playing
+    if(handleGreenBtn()) {
+      String folder = (musicIdx == 0) ? "/canciones" : "/himnos";
+      loadMusicFiles(folder);
 
-        state = AUDIO;
+      if(fileCount > 0) {
+        currentSong = 0;
+        state = PLAY;
+        playMusic(currentSong);   // drawSong() runs here on Core 1. Actual MP3 decode runs on Core 0
+      } else {
+        Serial.println("No MP3 files found in folder");
       }
     }
-    else if (state == AUDIO && !started) {
-      File root = SD.open(musicFolder);
+  }
+  else if(state == PLAY) {
+    isIdleScreenDisplayed = false;
+    
+    // Button handling during playback
+    if(handleGreenBtn()) pauseResumeMusic(); // PLAY/PAUSE toggle
+    if(handleWhiteBtn()) nextSong();
+    if(handleYellowBtn()) previousSong();
 
-      if (root) {
-        loadMusicList(root);
-        root.close();
-      }
-
-      musicFolder = "";
-      currentSong = 0;
-      playMusic(currentSong);
-
-      started = true;
-      state = PLAY;
+    if(handleRedBtn()) {
+      stopMusic();
+      musicIdx = 0;
+      isMusicTypeDisplayed = false;
+      state = IDLE;
     }
-    else if(state == PLAY) {
-      if(handleGreenBtn()) {
-        audio.pauseResume();   // PLAY/PAUSE
-      }
+  }
+  else if(state == CONFIGS) {
+    isIdleScreenDisplayed = false;
 
-      if(handleWhiteBtn()) {
-        nextSong();
-      }
-
-      if(handleYellowBtn()) {
-        previousSong();
-      }
-
-      if(handleRedBtn()) {
-        audio.stopSong();
-        musicIdx = 0;
-        isMusicTypeDisplayed = false;
-        started = false;
-        state = IDLE;
-      }
+    if(!isConfigScreenDisplayed) {
+      displayConfigs();
+      isConfigScreenDisplayed = true;
     }
-    else if(state == CONFIGS) {
-      if(!isConfigScreenDisplayed) {
-        tft.fillScreen(bmoGreen);
-        tft.setCursor(20, 40);
-        tft.print("Configuraciones");
 
-        DateTime now = rtc.now();
-        getDate(tempDateArr, now);
-        getHour(tempHourArr, now);
+    if(handleRedBtn()) {
+      dateIdx = 0;
+      timeIdx = 0;
+      lastDateIdx = -1;
+      lastTimeIdx = -1;
 
-        isConfigScreenDisplayed = true;
-      }
+      isSetDateDone = false;
+      isSetHourDone = false;
+      isConfigScreenDisplayed = false;
 
-      if(handleRedBtn()) {
-        dateIdx = 0;
-        timeIdx = 0;
-        lastDateIdx = -1;
-        lastTimeIdx = -1;
+      state = IDLE;
+    }
 
-        isSetDateDone = false;
-        isSetHourDone = false;
-        isConfigScreenDisplayed = false;
 
-        started = false;
-        state = IDLE;
-      }
+    if(!isSetDateDone && !isSetHourDone) {
+      setDate(tempDateArr);
+    }
+    else if(isSetDateDone && !isSetHourDone) {
+      setHour(tempHourArr);
+    }
 
-      if(!isSetDateDone && !isSetHourDone) {
-        setDate(tempDateArr);
-      }
-      else if(isSetDateDone && !isSetHourDone) {
-        setHour(tempHourArr);
-      }
+    if(isSetDateDone && isSetHourDone) {
+      isSetDateDone = false;
+      isSetHourDone = false;
 
-      if(isSetDateDone && isSetHourDone) {
-        isSetDateDone = false;
-        isSetHourDone = false;
+      dateIdx = 0;
+      timeIdx = 0;
+      lastDateIdx = -1;
+      lastTimeIdx = -1;
 
-        dateIdx = 0;
-        timeIdx = 0;
-        lastDateIdx = -1;
-        lastTimeIdx = -1;
-
-        isConfigScreenDisplayed = false;
-        state = IDLE;
-      }
+      isConfigScreenDisplayed = false;
+      state = IDLE;
     }
   }
 }
