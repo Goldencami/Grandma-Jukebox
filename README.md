@@ -42,9 +42,10 @@ This project uses PSRAM to play music.
 
 In Arduino IDE:
 - Tools → PSRAM and set it to "OPI PSRAM"
-- Tools → Flash Size is set to match your module (16 MB).
+- Tools → Flash Size: "16 MB (128Mb)".
+- Tools → Partition Scheme: "16M Flash (2MB APP/12.5MB FATFS)".
 
-> These are the PSRAM and Flash size values for the ESP32 that is being used.
+> These are the PSRAM, Flash size and Partition Scheme values for the ESP32 that is being used.
 
 ## Pinouts with ESP32
 <img width="1637" height="727" alt="Image" src="https://github.com/user-attachments/assets/1d34ac77-a264-4828-980a-de5787600532" />

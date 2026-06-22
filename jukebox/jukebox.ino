@@ -730,12 +730,23 @@ void audioTask(void* param) {
       mp3->begin(audioSrc, audioOut);
       xSemaphoreTake(audioMutex, portMAX_DELAY);
       audioIsPlaying = true;
+      audioPaused    = false;   // always start new track unpaused
       xSemaphoreGive(audioMutex);
       Serial.printf("Now playing: %s\n", path.c_str());
     }
 
     // Run one decode loop iteration if playing
     if (mp3 && mp3->isRunning()) {
+      xSemaphoreTake(audioMutex, portMAX_DELAY);
+      bool paused = audioPaused;
+      xSemaphoreGive(audioMutex);
+
+      // When paused: keep decoding but at gain=0 so DMA buffers stay filled
+      // with silence. This prevents the "drain glitch" where stale loud frames
+      // play out because decode stopped but DMA kept pushing existing data.
+      // When resuming: gain is restored before the next decode call.
+      audioOut->SetGain(paused ? 0.0 : 0.5);
+
       if (!mp3->loop()) {
         // Track finished naturally
         mp3->stop();
@@ -744,7 +755,6 @@ void audioTask(void* param) {
         xSemaphoreTake(audioMutex, portMAX_DELAY);
         audioIsPlaying = false;
         xSemaphoreGive(audioMutex);
-        // Notify Core 1 that the track ended
         onTrackFinished();
       }
     } else {
