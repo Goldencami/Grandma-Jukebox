@@ -832,7 +832,6 @@ void setup() {
   BMOidleFace();
   displayRTC();
 
-  // ---- Reconfigure watchdog BEFORE launching audio task ----
   // mp3->loop() runs continuously on Core 0 and will starve IDLE0.
   // Reconfigure TWDT to not monitor Core 0's IDLE task, and disable panic.
   esp_task_wdt_config_t wdt_config = {
