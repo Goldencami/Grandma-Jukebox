@@ -94,8 +94,11 @@ int monthIdx = 0;
 // SD CARD VARIABLES
 SPIClass sdSPI(HSPI);   // plain object, not a pointer - no TFT in this sketch to order against
 
-// TFT VARIABLES
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+// TFT VARIABLES — using hardware SPI constructor so setSPISpeed() actually works.
+// The simple Adafruit_ST7789(CS, DC, MOSI, SCLK, RST) constructor uses software
+// SPI internally on ESP32, which is extremely slow and makes loop() unresponsive.
+SPIClass tftSPI(FSPI);
+Adafruit_ST7789 tft = Adafruit_ST7789(&tftSPI, TFT_CS, TFT_DC, TFT_RST);
 
 // STATE MACHINE VARIABLES
 enum State {
@@ -286,7 +289,7 @@ void pauseResumeMusic() {
   xSemaphoreTake(audioMutex, portMAX_DELAY);
   audioPaused = !audioPaused;
   xSemaphoreGive(audioMutex);
-  Serial.printf("Audio %s\n", audioPaused ? "paused" : "resumed");
+  // Serial.printf("Audio %s\n", audioPaused ? "paused" : "resumed");
 }
 
 // Called by audioTask on Core 0 when a track finishes naturally
@@ -732,7 +735,7 @@ void audioTask(void* param) {
       audioIsPlaying = true;
       audioPaused    = false;   // always start new track unpaused
       xSemaphoreGive(audioMutex);
-      Serial.printf("Now playing: %s\n", path.c_str());
+      // Serial.printf("Now playing: %s\n", path.c_str());
     }
 
     // Run one decode loop iteration if playing
@@ -785,7 +788,7 @@ void loadMusicFiles(String folder) {
     entry = dir.openNextFile();
   }
   dir.close();
-  Serial.printf("Loaded %d tracks from %s\n", fileCount, folder.c_str());
+  // Serial.printf("Loaded %d tracks from %s\n", fileCount, folder.c_str());
 }
 
 void setup() {
@@ -806,7 +809,9 @@ void setup() {
 
   bmoGreen = tft.color565(150, 240, 186);
 
-  tft.init(240, 320);     // ST7789 needs explicit native resolution passed here
+  tftSPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);  // begin hardware SPI bus
+  tft.init(240, 320);
+  tft.setSPISpeed(40000000);  // 40MHz — hardware SPI so this actually takes effect
   tft.invertDisplay(false);  // counteract library's default ST77XX_INVON
   tft.setRotation(1);
   tft.setFont(&FreeSansBold12pt7b);
