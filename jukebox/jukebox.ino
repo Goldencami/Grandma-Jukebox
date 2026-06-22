@@ -694,6 +694,15 @@ bool handleGreenBtn() {
   return false;
 }
 
+// Helper — call only from Core 0 (audioTask)
+void rampGain(float from, float to, int steps = 20, int stepMs = 5) {
+  for (int i = 0; i <= steps; i++) {
+    float g = from + (to - from) * i / steps;
+    audioOut->SetGain(g);
+    vTaskDelay(pdMS_TO_TICKS(stepMs));
+  }
+}
+
 // ============================================================
 // Core 0 — Audio task: decodes MP3 and feeds I2S
 // Never touches TFT — completely isolated from Core 1 UI work
@@ -708,16 +717,19 @@ void audioTask(void* param) {
     xSemaphoreTake(audioMutex, portMAX_DELAY);
     bool shouldPlay = audioShouldPlay;
     bool shouldStop = audioShouldStop;
-    int  trackIdx   = audioTrackIndex;
-    if (shouldPlay)  audioShouldPlay = false;
-    if (shouldStop)  audioShouldStop = false;
+    int  trackIdx = audioTrackIndex;
+    if (shouldPlay) audioShouldPlay = false;
+    if (shouldStop) audioShouldStop = false;
     xSemaphoreGive(audioMutex);
 
     // Stop currently playing track if requested
     if (shouldStop && mp3 && mp3->isRunning()) {
+      rampGain(0.5, 0.0);   // ← fade out over ~100ms before cutting
       mp3->stop();
-      delete mp3;      mp3      = nullptr;
-      delete audioSrc; audioSrc = nullptr;
+      delete mp3;
+      mp3 = nullptr;
+      delete audioSrc; 
+      audioSrc = nullptr;
       xSemaphoreTake(audioMutex, portMAX_DELAY);
       audioIsPlaying = false;
       xSemaphoreGive(audioMutex);
@@ -727,11 +739,12 @@ void audioTask(void* param) {
     if (shouldPlay && trackIdx < fileCount) {
       String path = musicFiles[trackIdx];
       audioSrc = new AudioFileSourceSD(path.c_str());
-      mp3      = new AudioGeneratorMP3();
+      mp3 = new AudioGeneratorMP3();
       mp3->begin(audioSrc, audioOut);
+      rampGain(0.0, 0.5); // ← fade in after the new track starts decoding
       xSemaphoreTake(audioMutex, portMAX_DELAY);
       audioIsPlaying = true;
-      audioPaused    = false;   // always start new track unpaused
+      audioPaused = false;   // always start new track unpaused
       xSemaphoreGive(audioMutex);
       // Serial.printf("Now playing: %s\n", path.c_str());
     }
