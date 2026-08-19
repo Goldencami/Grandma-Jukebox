@@ -35,19 +35,19 @@
 #define TFT_SCLK 12
 
 // TIME VARIABLES
-unsigned int debounceDelayYellow = 100;
+unsigned int debounceDelayYellow = 500;
 unsigned long lastYellowDebounce = millis();
 byte yellowBtnState = LOW;
 
-unsigned int debounceDelayWhite = 100;
+unsigned int debounceDelayWhite = 500;
 unsigned long lastWhiteDebounce = millis();
 byte whiteBtnState = LOW;
 
-unsigned int debounceDelayRed = 100;
+unsigned int debounceDelayRed = 500;
 unsigned long lastRedDebounce = millis();
 byte redBtnState = LOW;
 
-unsigned int debounceDelayGreen = 100;
+unsigned int debounceDelayGreen = 500;
 unsigned long lastGreenDebounce = millis();
 byte greenBtnState = LOW;
 
@@ -73,6 +73,7 @@ volatile bool audioPaused     = false;   // Core 1 toggles to pause/resume
 volatile int  audioTrackIndex = 0;       // which track to play
 SemaphoreHandle_t audioMutex;
 TaskHandle_t audioTaskHandle = nullptr;
+volatile bool manualStop = false;
 
 // RTC VARIABLES
 RTC_DS3231 rtc;
@@ -94,7 +95,7 @@ int monthIdx = 0;
 // SD CARD VARIABLES
 SPIClass sdSPI(HSPI);   // plain object, not a pointer - no TFT in this sketch to order against
 
-// TFT VARIABLES — using hardware SPI constructor so setSPISpeed() actually works.
+// TFT VARIABLES —> using hardware SPI constructor so setSPISpeed() actually works.
 // The simple Adafruit_ST7789(CS, DC, MOSI, SCLK, RST) constructor uses software
 // SPI internally on ESP32, which is extremely slow and makes loop() unresponsive.
 SPIClass tftSPI(FSPI);
@@ -282,6 +283,7 @@ void stopMusic() {
   xSemaphoreTake(audioMutex, portMAX_DELAY);
   audioShouldStop = true;
   audioShouldPlay = false;
+  manualStop = true;
   xSemaphoreGive(audioMutex);
 }
 
@@ -306,17 +308,24 @@ void onTrackFinished() {
 void nextSong() {
   currentSong++;
   if (currentSong >= fileCount) {
-    stopMusic();
+    stopMusic();  // already sets manualStop = true
     currentSong = 0;
     state = IDLE;
-  } else {
+  } 
+  else {
+    xSemaphoreTake(audioMutex, portMAX_DELAY);
+    manualStop = true;  // ← add this before playMusic
+    xSemaphoreGive(audioMutex);
     playMusic(currentSong);
   }
 }
 
 void previousSong() {
-  if (currentSong <= 0) return; // already at the first song, do nothing
+  if (currentSong <= 0) return;
   currentSong--;
+  xSemaphoreTake(audioMutex, portMAX_DELAY);
+  manualStop = true;
+  xSemaphoreGive(audioMutex);
   playMusic(currentSong);
 }
 
@@ -694,7 +703,7 @@ bool handleGreenBtn() {
   return false;
 }
 
-// Helper — call only from Core 0 (audioTask)
+// Helper —> call only from Core 0 (audioTask)
 void rampGain(float from, float to, int steps = 20, int stepMs = 5) {
   for (int i = 0; i <= steps; i++) {
     float g = from + (to - from) * i / steps;
@@ -704,7 +713,7 @@ void rampGain(float from, float to, int steps = 20, int stepMs = 5) {
 }
 
 // ============================================================
-// Core 0 — Audio task: decodes MP3 and feeds I2S
+// Core 0 —> Audio task: decodes MP3 and feeds I2S
 // Never touches TFT — completely isolated from Core 1 UI work
 // ============================================================
 void audioTask(void* param) {
@@ -746,7 +755,7 @@ void audioTask(void* param) {
       audioIsPlaying = true;
       audioPaused = false;   // always start new track unpaused
       xSemaphoreGive(audioMutex);
-      // Serial.printf("Now playing: %s\n", path.c_str());
+      Serial.printf("Now playing: %s\n", path.c_str());
     }
 
     // Run one decode loop iteration if playing
@@ -764,12 +773,17 @@ void audioTask(void* param) {
       if (!mp3->loop()) {
         // Track finished naturally
         mp3->stop();
-        delete mp3;      mp3      = nullptr;
-        delete audioSrc; audioSrc = nullptr;
+        delete mp3;
+        mp3 = nullptr;
+        delete audioSrc;
+        audioSrc = nullptr;
         xSemaphoreTake(audioMutex, portMAX_DELAY);
         audioIsPlaying = false;
+        bool wasManual = manualStop;
+        manualStop = false;
         xSemaphoreGive(audioMutex);
-        onTrackFinished();
+        
+        if (!wasManual) onTrackFinished(); // only auto-advance if natural finish
       }
     } else {
       // Nothing playing — yield so Core 1 isn't starved
@@ -822,7 +836,7 @@ void setup() {
 
   tftSPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);  // begin hardware SPI bus
   tft.init(240, 320);
-  tft.setSPISpeed(40000000);  // 40MHz — hardware SPI so this actually takes effect
+  tft.setSPISpeed(20000000);  // hardware SPI so this actually takes effect
   tft.invertDisplay(false);  // counteract library's default ST77XX_INVON
   tft.setRotation(1);
   tft.setFont(&FreeSansBold12pt7b);

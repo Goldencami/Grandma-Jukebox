@@ -11,7 +11,7 @@ Jukebox to play songs for grandma and pill reminder.
 - DS3231 RTC
 - MAX98357A I2S
 - 3525 4ohm 3W-2.0port
-- TF Micro SD Card Module
+- TF Micro SD Card Module with an onboard 3.3V voltage regulator circuit
 - 32GB Sandisk Ultra Micro SD card
 - 4 x push buttons
 
@@ -67,11 +67,11 @@ In Arduino IDE:
 | SD Card | ESP32 |
 |---------|------------|
 | `GND` | `GND` |
-| `CLK` | `GPIO39` |
+| `VCC` | `VIN` |
 | `MISO` | `GPIO40` |
 | `MOSI` | `GPIO41` |
+| `SLK` | `GPIO39` |
 | `CS` | `GPIO10` |
-| `3.3V` | `3.3V` |
 
 ### DS3231 RTC
 | DS3231 RTC | ESP32 |
