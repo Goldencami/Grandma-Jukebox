@@ -192,6 +192,49 @@ void eraseDownArrow(int width, int y) {
   );
 }
 
+// Wraps `text` onto a second line if it's too wide to fit within `maxWidth`
+// pixels (measured using the TFT's current font). Breaks at the last space
+// that still fits on line 1. Returns 1 or 2 (the number of lines used).
+int wrapTextTwoLines(const String &text, int maxWidth, String &line1, String &line2) {
+  int16_t x1, y1;
+  uint16_t w, h;
+
+  tft.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+  if (w <= maxWidth) {
+    line1 = text;
+    line2 = "";
+    return 1;
+  }
+
+  // Walk through spaces, keeping the furthest break point that still fits
+  int breakIdx = -1;
+  int searchFrom = 0;
+  while (true) {
+    int spaceIdx = text.indexOf(' ', searchFrom);
+    if (spaceIdx == -1) break;
+
+    tft.getTextBounds(text.substring(0, spaceIdx), 0, 0, &x1, &y1, &w, &h);
+    if (w <= maxWidth) {
+      breakIdx = spaceIdx;
+      searchFrom = spaceIdx + 1;
+    } else {
+      break;
+    }
+  }
+
+  if (breakIdx == -1) {
+    // no single space makes line 1 fit (e.g. one very long word) —
+    // just show it as one line rather than butchering a word.
+    line1 = text;
+    line2 = "";
+    return 1;
+  }
+
+  line1 = text.substring(0, breakIdx);
+  line2 = text.substring(breakIdx + 1);
+  return 2;
+}
+
 void drawSong(String path) {
   int secondIndex = path.indexOf("/", path.indexOf("/") + 1);
 
@@ -203,20 +246,34 @@ void drawSong(String path) {
   String artist = title.substring(0, dashIdx - 2);
   String song = title.substring(dashIdx + 2, title.length());
 
-  tft.fillRect(0, 0, 320, 130, bmoGreen);
+  tft.fillRect(0, 0, 320, 150, bmoGreen);
   tft.setTextColor(ST77XX_BLACK, bmoGreen);
 
   int16_t x1, y1;
   uint16_t w, h;
 
-  // Center song title
-  tft.getTextBounds(song, 0, 0, &x1, &y1, &w, &h);
-  tft.setCursor((320 - w) / 2, 70);
-  tft.print(song);
+  // wrap  song title onto a second line if too wide for the screen
+  const int maxTitleWidth = 300; // ~10px margin on each side
+  const int lineHeight = 28;
+  String songLine1, songLine2;
+  int lineCount = wrapTextTwoLines(song, maxTitleWidth, songLine1, songLine2);
 
-  // Center artist name
+  int songStartY = (lineCount == 2) ? 55 : 70;
+
+  tft.getTextBounds(songLine1, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor((320 - w) / 2, songStartY);
+  tft.print(songLine1);
+
+  if (lineCount == 2) {
+    tft.getTextBounds(songLine2, 0, 0, &x1, &y1, &w, &h);
+    tft.setCursor((320 - w) / 2, songStartY + lineHeight);
+    tft.print(songLine2);
+  }
+
+  // Center artist name below the song title, shifting down if it wrapped
+  int artistY = songStartY + (lineCount - 1) * lineHeight + 45;
   tft.getTextBounds(artist, 0, 0, &x1, &y1, &w, &h);
-  tft.setCursor((320 - w) / 2, 120);
+  tft.setCursor((320 - w) / 2, artistY);
   tft.print(artist);
 }
 
