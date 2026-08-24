@@ -5,7 +5,7 @@ Jukebox to play songs for grandma.
 
 > WARNING: Do NOT use GPIO2 for buttons or any other digital I/O. It is an ESP32-S3 strapping pin sampled at boot — depending on its state at power-on, it can prevent the board from booting correctly.
 
-In development, use the USB-UART to upload code. The final version will have the charging cable to connect to USB-OTG.
+In development, use the USB-UART to upload code. The final version will use the charging cable to connect to USB-OTG.
 
 ## Components
 - ESP32-S3 WROOM: Dual-core 32-bit microprocessor up to 240 MHz, 16 MB Flash, 16 MB PSRAM
