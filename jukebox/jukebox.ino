@@ -243,7 +243,7 @@ void drawSong(String path) {
 
   // convention title is: artistName - songName
   int dashIdx = title.indexOf("-");
-  String artist = title.substring(0, dashIdx - 2);
+  String artist = title.substring(0, dashIdx - 1);
   String song = title.substring(dashIdx + 2, title.length());
 
   tft.fillRect(0, 0, 320, 150, bmoGreen);
