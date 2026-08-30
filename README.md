@@ -1,11 +1,37 @@
 # Grandma-Jukebox
 Jukebox to play songs for grandma.
 
+The micro SD card (32GB) contains two folders named `canciones` and `himnos` in which their corresponding mp3 files are located.
+
 > WARNING: Do **NOT** use GPIO19 or GPIO20 on this board. These GPIOs are internally connected to the USB-OTG and causes the USB no being detected by the computer. IF you accidentally upload a sketch and used those pins, you can upload an empty sketch using USB-UART and the communication with USB-OTG will work again.
 
 > WARNING: Do NOT use GPIO2 for buttons or any other digital I/O. It is an ESP32-S3 strapping pin sampled at boot — depending on its state at power-on, it can prevent the board from booting correctly.
 
 In development, use the USB-UART to upload code. The final version will use the charging cable to connect to USB-OTG.
+
+## Commands
+### Idle Screen (BMO Face)
+- **Yellow Button**:  Go to the Music Type Selection screen.
+- **Red Button**: Hold for 3 seconds to go to the Configuration screen.
+
+### Music Type Selection Screen
+*(selecting between "Canciones" and "Himnos Biblicos")*
+- **White Button**: Toggles between the two playlist options.
+- **Red Button**: Goes back to Idle Screen.
+- **Green Button**: CONFIRMS — loads and plays the selected playlist, then goes to the Now Playing screen.
+
+### Now Playing Screen
+- **Green Button**: Plays/pauses the current song.
+- **White Button**: Plays next song.
+- **Yellow Button**: Plays previous song.
+- **Red Button**: Stops the music and goes back to Idle Screen.
+
+### Configuration Screen
+*(setting date, then time — one field at a time: month → day → year, then hour → minute → AM/PM)*
+- **White Button**: Increases the value of the currently selected field.
+- **Yellow Button**: Decreases the value of the currently selected field.
+- **Green Button**: Confirms the current field and moves to the next one. On the last field of date/time, it also saves the value and advances to the next step (date → time → back to Idle).
+- **Red Button**: Cancels and goes back to Idle Screen.
 
 ## Components
 - ESP32-S3 WROOM: Dual-core 32-bit microprocessor up to 240 MHz, 16 MB Flash, 16 MB PSRAM
@@ -24,23 +50,28 @@ This panel's actual controller is ST7789, not ILI9341. Use the `Adafruit_ST7789`
 
 **Why not Adafruit_ILI9341**: Works partially (boots, draws, colors correctable via a manual R/B channel swap) but the addressable drawing window doesn't match the physical glass — roughly 1/5 of the right edge of the screen is not usable. This confirms the controller is not actually ILI9341.
 
+**Use hardware SPI, not the simple constructor**: The plain `Adafruit_ST7789(CS, DC, MOSI, SCLK, RST)` constructor falls back to software SPI on ESP32, which is slow enough to make `loop()` unresponsive. Use the hardware-SPI constructor (an explicit `SPIClass` bound to a free SPI bus) instead, and call `setSPISpeed()` so the higher clock actually takes effect.
+
 Confirmed working setup (`Adafruit_ST7789`):
 ```cpp
 #include <Adafruit_ST7789.h>
 
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+SPIClass tftSPI(FSPI);
+Adafruit_ST7789 tft = Adafruit_ST7789(&tftSPI, TFT_CS, TFT_DC, TFT_RST);
 
-tft.init(240, 320);        // native resolution, required
-tft.invertDisplay(false);  // REQUIRED — this panel needs inversion off;
-                            // library defaults to inverted (ST77XX_INVON),
-                            // which shows colors wrong (e.g. white as black)
-tft.setRotation(1);        // landscape: width=320, height=240
+tftSPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS); // hardware SPI bus, no MISO needed
+tft.init(240, 320);         // native resolution, required
+tft.setSPISpeed(20000000);  // only takes effect with hardware SPI
+tft.invertDisplay(false);   // REQUIRED — this panel needs inversion off;
+                             // library defaults to inverted (ST77XX_INVON),
+                             // which shows colors wrong (e.g. white as black)
+tft.setRotation(1);         // landscape: width=320, height=240
 ```
 
 If you ever swap in a genuinely different physical panel, re-verify the driver chip and re-test `invertDisplay(true)` vs `false` and color order before assuming this config still applies.
 
 ## Enable PSRAM in the IDE
-This project uses PSRAM to play music. 
+This project enables PSRAM.
 
 In Arduino IDE:
 - Tools → PSRAM and set it to "OPI PSRAM"
@@ -48,6 +79,8 @@ In Arduino IDE:
 - Tools → Partition Scheme: "16M Flash (2MB APP/12.5MB FATFS)".
 
 > These are the PSRAM, Flash size and Partition Scheme values for the ESP32 that is being used.
+>
+> TODO: confirm and document *why* PSRAM is required (e.g. instability/crash without it) — the sketch doesn't call `ps_malloc`/`ps_calloc` directly, so if this was needed for a specific crash or buffer, note it here for future reference.
 
 ## Pinouts with ESP32
 <img width="1637" height="727" alt="Image" src="https://github.com/user-attachments/assets/1d34ac77-a264-4828-980a-de5787600532" />
