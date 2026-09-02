@@ -9,6 +9,8 @@ The micro SD card (32GB) contains two folders named `canciones` and `himnos` in 
 
 In development, use the USB-UART to upload code. The final version will use the charging cable to connect to USB-OTG.
 
+https://github.com/user-attachments/assets/e78aba78-86dd-4827-824b-220895683b4c
+
 ## Commands
 ### Idle Screen (BMO Face)
 - **Yellow Button**:  Go to the Music Type Selection screen.
