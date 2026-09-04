@@ -135,3 +135,6 @@ In Arduino IDE:
 | `WHITE` | `GPIO17` |
 | `RED` | `GPIO38` |
 | `GREEN` | `GPIO1` |
+
+
+<img width="3300" height="2550" alt="Image" src="https://github.com/user-attachments/assets/f13d9ee9-ba31-480d-9429-1f7ee259034a" />
