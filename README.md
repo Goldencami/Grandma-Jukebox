@@ -140,4 +140,4 @@ In Arduino IDE:
 <img width="3300" height="2550" alt="Image" src="https://github.com/user-attachments/assets/f13d9ee9-ba31-480d-9429-1f7ee259034a" />
 
 ## Credits
-Only the arms and legs were taken from the [BMO model](https://www.printables.com/model/1582055-bmo-from-adventure-time-local-ai-agent-project) by brenpoly. They were printed at 1.5x scale to fit BMO's body.
+The arms and legs are from the [BMO model](https://www.printables.com/model/1582055-bmo-from-adventure-time-local-ai-agent-project) by brenpoly, licensed under [CC BY-NC 4.0](http://creativecommons.org/licenses/by-nc/4.0/). They were scaled to 1.5x to fit BMO's body. No other parts of that model were used.
